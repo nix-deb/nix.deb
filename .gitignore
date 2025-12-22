@@ -3,6 +3,8 @@
 
 # Build outputs
 out/
+result
+result-*
 sysroots/*/
 sysroots/.cache/
 sysroots/meson-cross-*.ini
