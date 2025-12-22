@@ -14,6 +14,13 @@
         # Import VM infrastructure
         vmLib = import ./nix/vm { inherit pkgs; };
 
+        # LLVM/Clang toolchain (single version for all distros)
+        llvmVersion = "21.1.8";
+        llvmTarball = pkgs.fetchurl {
+          url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${llvmVersion}/LLVM-${llvmVersion}-Linux-X64.tar.xz";
+          sha256 = "0avkfnsx2j9vms8mn0rg3jq2bl4l56c76g7amhv0gm8m3n0g5dxk";
+        };
+
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
           debian-bookworm = pkgs.fetchurl {
@@ -40,7 +47,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name;
+          inherit name llvmTarball llvmVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;

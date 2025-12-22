@@ -8,28 +8,7 @@ let
   '';
 
   # Cloud-init configuration for first boot
-  mkCloudInit = { name, family, codename }: let
-    # Packages to install in the VM
-    packages = [
-      "build-essential"
-      "clang"
-      "lld"
-      "cmake"
-      "ninja-build"
-      "meson"
-      "pkg-config"
-      "autoconf"
-      "automake"
-      "libtool"
-      "bison"
-      "flex"
-      "gettext"
-      "git"
-      "curl"
-      "wget"
-      "ca-certificates"
-    ];
-
+  mkCloudInit = { name, family, codename, llvmVersion }: let
     userData = pkgs.writeText "user-data" ''
 #cloud-config
 hostname: ${name}
@@ -40,9 +19,7 @@ users:
 
 package_update: true
 packages:
-  - build-essential
-  - clang
-  - lld
+  # Build tools (no compilers - we use LLVM from tarball)
   - cmake
   - ninja-build
   - meson
@@ -50,6 +27,7 @@ packages:
   - autoconf
   - automake
   - libtool
+  - make
   - bison
   - flex
   - gettext
@@ -57,13 +35,33 @@ packages:
   - curl
   - wget
   - ca-certificates
+  - xz-utils
 
 mounts:
   - [ host_share, /mnt/host, 9p, "trans=virtio,version=9p2000.L,msize=104857600", "0", "0" ]
+  - [ llvm_share, /mnt/llvm, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
 
 runcmd:
-  - mkdir -p /mnt/host
+  - mkdir -p /mnt/host /mnt/llvm
   - mount -a
+  # Install LLVM from tarball on 9P share
+  - mkdir -p /opt/llvm
+  - tar -xf /mnt/llvm/LLVM-${llvmVersion}-Linux-X64.tar.xz -C /opt/llvm --strip-components=1
+  # Set up symlinks in /usr/local/bin for easy access
+  - ln -sf /opt/llvm/bin/clang /usr/local/bin/clang
+  - ln -sf /opt/llvm/bin/clang++ /usr/local/bin/clang++
+  - ln -sf /opt/llvm/bin/clang-cpp /usr/local/bin/clang-cpp
+  - ln -sf /opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
+  - ln -sf /opt/llvm/bin/lld /usr/local/bin/lld
+  - ln -sf /opt/llvm/bin/llvm-ar /usr/local/bin/llvm-ar
+  - ln -sf /opt/llvm/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
+  - ln -sf /opt/llvm/bin/llvm-nm /usr/local/bin/llvm-nm
+  - ln -sf /opt/llvm/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
+  - ln -sf /opt/llvm/bin/llvm-objdump /usr/local/bin/llvm-objdump
+  - ln -sf /opt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
+  # Make clang the default CC/CXX
+  - update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
+  - update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
   - echo "VM ready" > /var/run/vm-ready
     '';
 
@@ -80,10 +78,17 @@ runcmd:
   '';
 
   # Create the VM wrapper script
-  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk }:
+  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmTarball, llvmVersion }:
     let
       # Working directory for this VM
       vmDir = "$HOME/.cache/nix-deb-vm/${name}";
+
+      # Create a directory with the LLVM tarball for 9P sharing
+      # Note: Must copy, not symlink, because 9P doesn't follow symlinks properly
+      llvmShareDir = pkgs.runCommand "llvm-share" {} ''
+        mkdir -p $out
+        cp ${llvmTarball} $out/LLVM-${llvmVersion}-Linux-X64.tar.xz
+      '';
 
       # Base QEMU args (shared between foreground and background)
       qemuBaseArgs = [
@@ -99,8 +104,11 @@ runcmd:
         # Cloud-init seed disk
         "-drive file=${cloudInitDisk}/seed.img,if=virtio,format=raw,readonly=on"
 
-        # 9P share for host files
+        # 9P share for host files (repo)
         "-virtfs local,path=${hostSharePath},mount_tag=host_share,security_model=mapped-xattr,id=host_share"
+
+        # 9P share for LLVM tarball
+        "-virtfs local,path=${llvmShareDir},mount_tag=llvm_share,security_model=mapped-xattr,readonly=on,id=llvm_share"
 
         # Networking with SSH port forward
         "-nic user,hostfwd=tcp:127.0.0.1:2222-:22"
@@ -243,14 +251,8 @@ fi
 if command -v clang++ &>/dev/null; then
   echo "| clang++ | $(clang++ --version | head -1 | sed 's/.*version //' | awk '{print $1}') |"
 fi
-if command -v gcc &>/dev/null; then
-  echo "| gcc | $(gcc --version | head -1 | awk '{print $NF}') |"
-fi
-if command -v g++ &>/dev/null; then
-  echo "| g++ | $(g++ --version | head -1 | awk '{print $NF}') |"
-fi
 if command -v ld.lld &>/dev/null; then
-  echo "| lld | $(ld.lld --version | head -1 | awk '{print $3}') |"
+  echo "| lld | $(ld.lld --version | head -1 | awk '{print $2}') |"
 fi
 if command -v make &>/dev/null; then
   echo "| make | $(make --version | head -1 | awk '{print $NF}') |"
@@ -320,11 +322,11 @@ TOOLS_SCRIPT
     '';
 
   # Main function to create a development VM
-  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath }:
+  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmTarball, llvmVersion }:
     let
-      cloudInitDisk = mkCloudInit { inherit name family codename; };
+      cloudInitDisk = mkCloudInit { inherit name family codename llvmVersion; };
     in mkVmScript {
-      inherit name cloudImage hostSharePath cloudInitDisk;
+      inherit name cloudImage hostSharePath cloudInitDisk llvmTarball llvmVersion;
     };
 
 in {

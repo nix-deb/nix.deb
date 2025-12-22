@@ -159,12 +159,12 @@ We need to:
 - Avoid path dependence (something "works" only because of prior experimentation steps)
 - Have high fidelity to the actual target environment
 
-### The Solution: Nix-built QEMU VMs with btrfs snapshots
+### The Solution: Nix-built QEMU VMs with QEMU snapshots
 
 We use Nix to build minimal QEMU VM images for each target distribution. This gives us:
 
 1. **Reproducible VM images** - Version controlled, rebuildable from scratch
-2. **Fast iteration via btrfs snapshots** - Instant rollback to clean state
+2. **Fast iteration via QEMU snapshots** - Instant rollback to clean state
 3. **High fidelity** - Real Debian/Ubuntu, not containers
 4. **No networking required** - 9P filesystem shares data between host and guest
 5. **Works everywhere** - NixOS, macOS (via lima or native QEMU)
@@ -178,11 +178,11 @@ We use Nix to build minimal QEMU VM images for each target distribution. This gi
 │  │  - VM image      │    │  ┌─────────────────────────┐    │    │
 │  │  - Source tars   │───▶│  │  /mnt/host (9P mount)   │    │    │
 │  │  - Build scripts │    │  │  - sources/             │    │    │
-│  │                  │    │  │  - scripts/             │    │    │
+│  │  - LLVM tarball  │    │  │  - scripts/             │    │    │
 │  └──────────────────┘    │  │  - output/              │    │    │
 │                          │  └─────────────────────────┘    │    │
 │                          │                                  │    │
-│  ┌──────────────────┐    │  btrfs root:                    │    │
+│  ┌──────────────────┐    │  QEMU qcow2 snapshots:          │    │
 │  │ Snapshot manager │───▶│  - instant rollback             │    │
 │  │  vm snapshot     │    │  - verify from clean state      │    │
 │  │  vm restore      │    │                                  │    │
@@ -197,7 +197,7 @@ We use Nix to build minimal QEMU VM images for each target distribution. This gi
 # 1. Build the VM image for a target distro
 nix build .#vm-debian-bookworm
 
-# 2. Start the VM (creates initial btrfs snapshot)
+# 2. Start the VM
 ./result/bin/vm run
 
 # 3. Inside VM: run build scripts from 9P mount
@@ -226,20 +226,26 @@ cd /mnt/host
 - [ ] `flake.nix` - Expose VM images as flake outputs
 
 Each VM image includes:
-- Minimal base system (debootstrap or equivalent)
-- build-essential, clang, cmake, meson, ninja
-- btrfs-progs (for snapshot support)
+- Minimal base system (official cloud images)
+- Build tools: cmake, meson, ninja, autoconf, automake, libtool, pkg-config
+- LLVM/Clang 21.1.8 (fetched by Nix, consistent across all distros)
 - SSH server with key auth (for non-interactive command execution)
 - No internet access (isolated), but localhost SSH for control
+
+**Compiler standardization**: We use a single version of LLVM/Clang (21.1.8) across
+all target distributions, fetched from GitHub releases and installed via cloud-init.
+This ensures consistent compiler behavior regardless of target distro. We do NOT use
+gcc/g++ - clang only.
 
 QEMU configuration:
 - `-nic user,hostfwd=tcp:127.0.0.1:2222-:22` for SSH access
 - 9P virtio for filesystem sharing
-- btrfs disk image for snapshots
+- qcow2 disk with QEMU internal snapshots for rollback
 
 The 9P share (`/mnt/host` in guest) provides:
 - Source tarballs (fetched by Nix, content-addressed)
 - Build scripts (this repository)
+- LLVM tarball (fetched by Nix)
 - Output directory (for built artifacts)
 
 VM control wrapper commands:
