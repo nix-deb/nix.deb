@@ -203,32 +203,25 @@ setup_sysroot() {
             local new_target="$rel_sysroot${target}"
             ln -sf "$new_target" "$link"
         fi
-    done
+done
 
     # Create standard directory structure if missing
     mkdir -p "$sysroot/usr/lib"
     mkdir -p "$sysroot/usr/include"
+    mkdir -p "$sysroot/usr/bin"
 
-    # Debug linker scripts (libc.so, libpthread.so)
-    log_info "Debugging linker scripts..."
-    find "$sysroot" -name "*.so" -type f | while read -r script; do
-        if grep -q "GNU ld script" "$script"; then
-            log_info "Linker script found: $script"
-            echo "--- CONTENT OF $script ---" >&2
-            cat "$script" >&2
-            echo "--- END CONTENT ---" >&2
+    # Normalize sysroot layout (merged-usr)
+    log_info "Normalizing sysroot layout..."
+    for dir in lib lib64 bin; do
+        if [[ -d "$sysroot/$dir" && ! -L "$sysroot/$dir" ]]; then
+            # Move contents to /usr and make the original a symlink
+            cp -a "$sysroot/$dir/"* "$sysroot/usr/$dir/" 2>/dev/null || true
+            rm -rf "$sysroot/$dir"
+            ln -sf "usr/$dir" "$sysroot/$dir"
+        elif [[ ! -e "$sysroot/$dir" ]]; then
+            ln -sf "usr/$dir" "$sysroot/$dir"
         fi
     done
-
-    # Create standard directory structure if missing
-    mkdir -p "$sysroot/usr/lib"
-    mkdir -p "$sysroot/usr/include"
-
-    # Some distros put things in /lib instead of /usr/lib
-    # Create symlinks to normalize
-    if [[ -d "$sysroot/lib" && ! -L "$sysroot/lib" ]]; then
-        cp -a "$sysroot/lib/"* "$sysroot/usr/lib/" 2>/dev/null || true
-    fi
 
     log_success "Sysroot created at $sysroot"
 
@@ -246,9 +239,9 @@ generate_meson_cross_file() {
     local cpu_family
     local cpu
     case "$arch" in
-        amd64|x86_64) cpu_family="x86_64"; cpu="x86_64" ;;
-        arm64|aarch64) cpu_family="aarch64"; cpu="aarch64" ;;
-        *) cpu_family="$arch"; cpu="$arch" ;;
+        amd64|x86_64) cpu_family="x86_64"; cpu="x86_64" ;; 
+        arm64|aarch64) cpu_family="aarch64"; cpu="aarch64" ;; 
+        *) cpu_family="$arch"; cpu="$arch" ;; 
     esac
 
     cat > "$cross_file" <<EOF
@@ -296,22 +289,22 @@ while [[ $# -gt 0 ]]; do
         --arch)
             TARGET_ARCH="$2"
             shift 2
-            ;;
+            ;; 
         --list)
             list_distros
             exit 0
-            ;;
+            ;; 
         -h|--help)
             usage
             exit 0
-            ;;
+            ;; 
         -*)
             die "Unknown option: $1"
-            ;;
+            ;; 
         *)
             DISTRO="$1"
             shift
-            ;;
+            ;; 
     esac
 done
 
