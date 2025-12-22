@@ -210,18 +210,33 @@ done
     mkdir -p "$sysroot/usr/include"
     mkdir -p "$sysroot/usr/bin"
 
-    # Normalize sysroot layout (merged-usr)
+    # Normalize sysroot layout (merged-usr style)
     log_info "Normalizing sysroot layout..."
-    for dir in lib lib64 bin; do
-        if [[ -d "$sysroot/$dir" && ! -L "$sysroot/$dir" ]]; then
-            # Move contents to /usr and make the original a symlink
-            cp -a "$sysroot/$dir/"* "$sysroot/usr/$dir/" 2>/dev/null || true
-            rm -rf "$sysroot/$dir"
-            ln -sf "usr/$dir" "$sysroot/$dir"
-        elif [[ ! -e "$sysroot/$dir" ]]; then
-            ln -sf "usr/$dir" "$sysroot/$dir"
-        fi
-    done
+
+    # Ensure /usr/lib64 exists
+    mkdir -p "$sysroot/usr/lib64"
+
+    # Create /lib64 -> usr/lib64 symlink
+    if [[ -d "$sysroot/lib64" && ! -L "$sysroot/lib64" ]]; then
+        cp -a "$sysroot/lib64/"* "$sysroot/usr/lib64/" 2>/dev/null || true
+        rm -rf "$sysroot/lib64"
+    fi
+    [[ ! -e "$sysroot/lib64" ]] && ln -sf usr/lib64 "$sysroot/lib64"
+
+    # Create /lib -> usr/lib symlink
+    if [[ -d "$sysroot/lib" && ! -L "$sysroot/lib" ]]; then
+        cp -a "$sysroot/lib/"* "$sysroot/usr/lib/" 2>/dev/null || true
+        rm -rf "$sysroot/lib"
+    fi
+    [[ ! -e "$sysroot/lib" ]] && ln -sf usr/lib "$sysroot/lib"
+
+    # Ensure the dynamic linker is accessible at /lib64/ld-linux-x86-64.so.2
+    # The libc.so linker script references this absolute path
+    if [[ -f "$sysroot/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2" ]]; then
+        ln -sf ../lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 "$sysroot/usr/lib64/ld-linux-x86-64.so.2"
+    elif [[ -f "$sysroot/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2" ]]; then
+        ln -sf ../lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 "$sysroot/usr/lib64/ld-linux-x86-64.so.2"
+    fi
 
     log_success "Sysroot created at $sysroot"
 
