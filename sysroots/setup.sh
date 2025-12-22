@@ -205,6 +205,18 @@ setup_sysroot() {
         fi
     done
 
+    # Fix up linker scripts (libc.so, libpthread.so) to use sysroot-relative paths
+    # These text files often contain absolute paths like /lib/x86_64-linux-gnu/libc.so.6
+    # We need to prefix them with '=' to tell the linker to look in the sysroot
+    log_info "Fixing linker scripts..."
+    find "$sysroot" -name "*.so" -type f | while read -r script; do
+        if grep -q "GNU ld script" "$script"; then
+            log_info "Patching linker script: $script"
+            sed -i 's| /lib/| =/lib/|g' "$script"
+            sed -i 's| /usr/lib/| =/usr/lib/|g' "$script"
+        fi
+    done
+
     # Create standard directory structure if missing
     mkdir -p "$sysroot/usr/lib"
     mkdir -p "$sysroot/usr/include"
