@@ -229,12 +229,27 @@ Each VM image includes:
 - Minimal base system (debootstrap or equivalent)
 - build-essential, clang, cmake, meson, ninja
 - btrfs-progs (for snapshot support)
-- No networking configured (intentionally isolated)
+- SSH server with key auth (for non-interactive command execution)
+- No internet access (isolated), but localhost SSH for control
 
-The 9P share provides:
+QEMU configuration:
+- `-nic user,hostfwd=tcp:127.0.0.1:2222-:22` for SSH access
+- 9P virtio for filesystem sharing
+- btrfs disk image for snapshots
+
+The 9P share (`/mnt/host` in guest) provides:
 - Source tarballs (fetched by Nix, content-addressed)
 - Build scripts (this repository)
 - Output directory (for built artifacts)
+
+VM control wrapper commands:
+```bash
+vm run              # Start the VM (backgrounds, waits for SSH ready)
+vm exec "command"   # Run command in VM via SSH, return output
+vm snapshot         # Take a named snapshot of current state
+vm restore          # Restore to last snapshot
+vm stop             # Shutdown the VM
+```
 
 #### Verification Gate
 
