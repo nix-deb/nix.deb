@@ -96,17 +96,17 @@ jobs:
           echo 'exec python3 /opt/meson/meson.py "$@"' | sudo tee -a /usr/local/bin/meson > /dev/null
           sudo chmod +x /usr/local/bin/meson
 
-      - name: Setup sysroot
+      - name: Setup sysroot (${{ inputs.distro }})
         run: |
           ./sysroots/setup.sh ${{ inputs.distro }}
 
-      - name: Build brotli
+      - name: Build brotli (${{ inputs.distro }})
         run: |
           TARGET_DISTRO=${{ inputs.distro }} \
           TARGET_ARCH=x86_64 \
           ./deps/brotli.sh
 
-      - name: Verify build
+      - name: Verify build (${{ inputs.distro }})
         run: |
           echo "=== Built libraries ==="
           ls -la out/${{ inputs.distro }}/prefix/lib/*.a

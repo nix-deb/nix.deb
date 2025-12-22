@@ -124,17 +124,17 @@ jobs:
             deps-${{ matrix.distro }}-${{ matrix.package }}-
             deps-${{ matrix.distro }}-
 
-      - name: Setup sysroot
+      - name: Setup sysroot (${{ matrix.distro }})
         run: |
           ./sysroots/setup.sh ${{ matrix.distro }}
 
-      - name: Build
+      - name: Build (${{ matrix.package }} for ${{ matrix.distro }})
         run: |
           ./build.sh \
             --distro $(echo ${{ matrix.distro }} | sed 's/-/:/' ) \
             --package ${{ matrix.package }}
 
-      - name: Check glibc symbols
+      - name: Check glibc symbols (${{ matrix.package }} for ${{ matrix.distro }})
         run: |
           # Find the built binary and check its glibc requirements
           binary="out/${{ matrix.distro }}/prefix/bin/${{ matrix.package }}"
