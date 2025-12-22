@@ -40,6 +40,13 @@
           chmod +x $out/bin/ninja
         '';
 
+        # CMake (newer than distro packages)
+        cmakeVersion = "4.2.1";
+        cmakeDir = pkgs.fetchzip {
+          url = "https://github.com/Kitware/CMake/releases/download/v${cmakeVersion}/cmake-${cmakeVersion}-linux-x86_64.tar.gz";
+          sha256 = "1pbh3fs92l3smcnv0qn39lbhl7awl2vnqmj2fgmk88in4ra0k5nc";
+        };
+
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
           debian-bookworm = pkgs.fetchurl {
@@ -66,7 +73,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name llvmDir llvmVersion ninjaDir ninjaVersion;
+          inherit name llvmDir llvmVersion ninjaDir ninjaVersion cmakeDir cmakeVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;

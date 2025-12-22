@@ -19,8 +19,7 @@ users:
 
 package_update: true
 packages:
-  # Build tools (compilers and ninja from Nix-managed 9P shares)
-  - cmake
+  # Build tools (compilers, ninja, cmake from Nix-managed 9P shares)
   - meson
   - pkg-config
   - autoconf
@@ -40,9 +39,10 @@ mounts:
   - [ host_share, /mnt/host, 9p, "trans=virtio,version=9p2000.L,msize=104857600", "0", "0" ]
   - [ llvm_share, /mnt/llvm, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
   - [ ninja_share, /mnt/ninja, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
+  - [ cmake_share, /mnt/cmake, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
 
 runcmd:
-  - mkdir -p /mnt/host /mnt/llvm /mnt/ninja
+  - mkdir -p /mnt/host /mnt/llvm /mnt/ninja /mnt/cmake
   - mount -a
   # Set up symlinks to LLVM tools (pre-extracted in Nix store, shared via 9P)
   - ln -sf /mnt/llvm/bin/clang /usr/local/bin/clang
@@ -58,6 +58,10 @@ runcmd:
   - ln -sf /mnt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
   # Ninja from Nix-managed 9P share
   - ln -sf /mnt/ninja/bin/ninja /usr/local/bin/ninja
+  # CMake from Nix-managed 9P share
+  - ln -sf /mnt/cmake/bin/cmake /usr/local/bin/cmake
+  - ln -sf /mnt/cmake/bin/ctest /usr/local/bin/ctest
+  - ln -sf /mnt/cmake/bin/cpack /usr/local/bin/cpack
   # Make clang the default CC/CXX
   - update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
   - update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
@@ -77,7 +81,7 @@ runcmd:
   '';
 
   # Create the VM wrapper script
-  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmDir, ninjaDir }:
+  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmDir, ninjaDir, cmakeDir }:
     let
       # Working directory for this VM
       vmDir = "$HOME/.cache/nix-deb-vm/${name}";
@@ -104,6 +108,9 @@ runcmd:
 
         # 9P share for Ninja
         "-virtfs local,path=${ninjaDir},mount_tag=ninja_share,security_model=mapped-xattr,readonly=on,id=ninja_share"
+
+        # 9P share for CMake
+        "-virtfs local,path=${cmakeDir},mount_tag=cmake_share,security_model=mapped-xattr,readonly=on,id=cmake_share"
 
         # Networking with SSH port forward
         "-nic user,hostfwd=tcp:127.0.0.1:2222-:22"
@@ -317,11 +324,11 @@ TOOLS_SCRIPT
     '';
 
   # Main function to create a development VM
-  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmDir, llvmVersion, ninjaDir, ninjaVersion }:
+  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmDir, llvmVersion, ninjaDir, ninjaVersion, cmakeDir, cmakeVersion }:
     let
       cloudInitDisk = mkCloudInit { inherit name family codename llvmVersion; };
     in mkVmScript {
-      inherit name cloudImage hostSharePath cloudInitDisk llvmDir ninjaDir;
+      inherit name cloudImage hostSharePath cloudInitDisk llvmDir ninjaDir cmakeDir;
     };
 
 in {
