@@ -14,23 +14,26 @@
         # Import VM infrastructure
         vmLib = import ./nix/vm { inherit pkgs; };
 
-        # LLVM/Clang toolchain (single version for all distros)
+        # Read tool versions from tools.json (single source of truth)
+        tools = builtins.fromJSON (builtins.readFile ./tools.json);
+
+        # LLVM/Clang toolchain
         # Pre-extracted in Nix store, shared via 9P to VMs
-        llvmVersion = "21.1.8";
+        llvmVersion = tools.llvm.version;
         llvmSrc = pkgs.fetchzip {
           url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${llvmVersion}/LLVM-${llvmVersion}-Linux-X64.tar.xz";
-          sha256 = "12g4p8zr4yff8l6pgpr4d3aalzflv5f1jh5pnlh8p778kay5azgk";
+          sha256 = tools.llvm.sha256;
         };
         # Dereference symlinks for 9P sharing (9P can't follow symlinks)
         llvmDir = pkgs.runCommand "llvm-dereferenced" {} ''
           cp -rL ${llvmSrc} $out
         '';
 
-        # Ninja build system (newer than distro packages)
-        ninjaVersion = "1.13.2";
+        # Ninja build system
+        ninjaVersion = tools.ninja.version;
         ninjaSrc = pkgs.fetchzip {
           url = "https://github.com/ninja-build/ninja/releases/download/v${ninjaVersion}/ninja-linux.zip";
-          sha256 = "sha256-DKUkXZEIAjZ4KSajXfvDMqQlEEq8mt2v8Yd9Ly73F1A=";
+          sha256 = tools.ninja.sha256;
           stripRoot = false;
         };
         # Wrap in bin/ directory for consistent structure
@@ -40,20 +43,20 @@
           chmod +x $out/bin/ninja
         '';
 
-        # CMake (newer than distro packages)
-        cmakeVersion = "4.2.1";
+        # CMake
+        cmakeVersion = tools.cmake.version;
         cmakeDir = pkgs.fetchzip {
           url = "https://github.com/Kitware/CMake/releases/download/v${cmakeVersion}/cmake-${cmakeVersion}-linux-x86_64.tar.gz";
-          sha256 = "1pbh3fs92l3smcnv0qn39lbhl7awl2vnqmj2fgmk88in4ra0k5nc";
+          sha256 = tools.cmake.sha256;
         };
 
-        # Meson build system (newer than distro packages)
-        mesonVersion = "1.10.0";
+        # Meson build system
+        mesonVersion = tools.meson.version;
         mesonSrc = pkgs.fetchzip {
           url = "https://github.com/mesonbuild/meson/releases/download/${mesonVersion}/meson-${mesonVersion}.tar.gz";
-          sha256 = "1dkmb94xri5gdcnmbxxc96i1z5rxvczi4ply1lwxdydga5amwhsh";
+          sha256 = tools.meson.sha256;
         };
-        # Create wrapper script that sets PYTHONPATH
+        # Create wrapper script that invokes meson.py
         mesonDir = pkgs.runCommand "meson-wrapped" {} ''
           mkdir -p $out/bin
           cat > $out/bin/meson << 'WRAPPER'

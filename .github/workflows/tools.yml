@@ -1,0 +1,84 @@
+name: Show Tools Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  show-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 \
+            pkg-config \
+            autoconf \
+            automake \
+            libtool \
+            make \
+            bison \
+            flex \
+            gettext \
+            git \
+            curl \
+            wget \
+            jq
+
+      - name: Read tool versions from tools.json
+        id: versions
+        run: |
+          echo "llvm_version=$(jq -r '.llvm.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "ninja_version=$(jq -r '.ninja.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "cmake_version=$(jq -r '.cmake.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "meson_version=$(jq -r '.meson.version' tools.json)" >> $GITHUB_OUTPUT
+
+      - name: Download and install LLVM
+        run: |
+          VERSION="${{ steps.versions.outputs.llvm_version }}"
+          curl -fsSL "https://github.com/llvm/llvm-project/releases/download/llvmorg-${VERSION}/LLVM-${VERSION}-Linux-X64.tar.xz" | tar -xJ
+          sudo mv "LLVM-${VERSION}-Linux-X64" /opt/llvm
+          sudo ln -sf /opt/llvm/bin/clang /usr/local/bin/clang
+          sudo ln -sf /opt/llvm/bin/clang++ /usr/local/bin/clang++
+          sudo ln -sf /opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
+          sudo ln -sf /opt/llvm/bin/lld /usr/local/bin/lld
+          sudo ln -sf /opt/llvm/bin/llvm-ar /usr/local/bin/llvm-ar
+          sudo ln -sf /opt/llvm/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
+          sudo ln -sf /opt/llvm/bin/llvm-nm /usr/local/bin/llvm-nm
+          sudo ln -sf /opt/llvm/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
+          sudo ln -sf /opt/llvm/bin/llvm-objdump /usr/local/bin/llvm-objdump
+          sudo ln -sf /opt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
+
+      - name: Download and install Ninja
+        run: |
+          VERSION="${{ steps.versions.outputs.ninja_version }}"
+          curl -fsSL "https://github.com/ninja-build/ninja/releases/download/v${VERSION}/ninja-linux.zip" -o ninja.zip
+          unzip -q ninja.zip
+          sudo mv ninja /usr/local/bin/ninja
+          sudo chmod +x /usr/local/bin/ninja
+          rm ninja.zip
+
+      - name: Download and install CMake
+        run: |
+          VERSION="${{ steps.versions.outputs.cmake_version }}"
+          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${VERSION}/cmake-${VERSION}-linux-x86_64.tar.gz" | tar -xz
+          sudo mv "cmake-${VERSION}-linux-x86_64" /opt/cmake
+          sudo ln -sf /opt/cmake/bin/cmake /usr/local/bin/cmake
+          sudo ln -sf /opt/cmake/bin/ctest /usr/local/bin/ctest
+          sudo ln -sf /opt/cmake/bin/cpack /usr/local/bin/cpack
+
+      - name: Download and install Meson
+        run: |
+          VERSION="${{ steps.versions.outputs.meson_version }}"
+          curl -fsSL "https://github.com/mesonbuild/meson/releases/download/${VERSION}/meson-${VERSION}.tar.gz" | tar -xz
+          sudo mv "meson-${VERSION}" /opt/meson
+          echo '#!/bin/sh' | sudo tee /usr/local/bin/meson > /dev/null
+          echo 'exec python3 /opt/meson/meson.py "$@"' | sudo tee -a /usr/local/bin/meson > /dev/null
+          sudo chmod +x /usr/local/bin/meson
+
+      - name: Show tools environment
+        run: |
+          chmod +x scripts/tools.sh
+          scripts/tools.sh
