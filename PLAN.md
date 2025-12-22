@@ -21,7 +21,7 @@ Build Nix and Lix from source for Debian/Ubuntu with only glibc as a runtime dep
 Create build scripts for all remaining dependencies. Each script follows the pattern in `deps/common.sh`.
 
 #### Tier 0 (no dependencies)
-- [ ] `deps/brotli.sh` - Brotli compression
+- [x] `deps/brotli.sh` - Brotli compression
 - [ ] `deps/libsodium.sh` - Cryptography (Nix only)
 - [ ] `deps/libblake3.sh` - BLAKE3 hashing (Nix only)
 - [ ] `deps/libcpuid.sh` - CPU feature detection
@@ -148,6 +148,45 @@ Lix also uses Meson. Similar investigation needed:
 - Cap'n Proto integration
 - Custom dependency paths
 - Static linking configuration
+
+### Nix Dependency Requirements (from meson.build analysis)
+
+**libutil** (core utility library) requires:
+- **libblake3** >= 1.8.2 (pkg-config)
+- **boost** >= 1.87.0 (modules: context, coroutine, iostreams, url)
+- **openssl/libcrypto** >= 1.1.1
+- **libarchive** >= 3.1.2
+- **libsodium**
+- **brotli** (libbrotlicommon, libbrotlidec, libbrotlienc)
+- **libcpuid** >= 0.7.0 (optional)
+- **nlohmann_json** >= 3.9
+
+**libstore** (store operations) requires:
+- **libseccomp** >= 2.5.5 (Linux only, critical for sandboxing)
+- **sqlite3** >= 3.6.19
+- **libcurl** >= 7.75.0
+- **boost** (modules: container, url)
+- **nlohmann_json** >= 3.9
+- AWS CRT libraries (optional, for S3 support)
+
+### Tier 0 Dependency Configure Options
+
+| Dependency | Build System | Configure Options | Notes |
+|------------|-------------|-------------------|-------|
+| **brotli** | CMake | `-DBUILD_SHARED_LIBS=OFF` | Produces 3 libs: brotlicommon, brotlidec, brotlienc |
+| **libsodium** | autoconf | `--disable-shared --enable-static` | Keep full API (avoid `--enable-minimal`), keep ASM |
+| **libblake3** | CMake | `-DBUILD_SHARED_LIBS=OFF -DBLAKE3_USE_TBB=OFF` | Auto-detects amd64-asm for x86_64 |
+| **libcpuid** | CMake | `-DBUILD_SHARED_LIBS=OFF` | Optional, CPU feature detection |
+| **libseccomp** | autoconf | `--disable-shared --enable-static` | Skip `--enable-python`, version >= 2.5.5 |
+| **attr** | autoconf | `--disable-shared --enable-static` | Required by acl and libarchive |
+| **libunistring** | autoconf | `--disable-shared --enable-static` | Keep namespacing (default), needed by libidn2 |
+
+### Optimization Levels
+
+All dependencies are built with `-O2` optimization (CMake Release mode default) which provides
+a good balance of performance and compile time. We explicitly avoid `-O3` to reduce binary
+size and potential for optimization-related bugs. The `-fPIC` flag is always enabled for
+position-independent code.
 
 ## Development Workflow
 

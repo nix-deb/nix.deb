@@ -1,0 +1,132 @@
+name: Build brotli
+
+on:
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'Target distribution'
+        required: true
+        default: 'debian-bookworm'
+        type: choice
+        options:
+          - debian-bookworm
+          - debian-bullseye
+          - debian-buster
+          - ubuntu-noble
+          - ubuntu-jammy
+          - ubuntu-focal
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3 \
+            pkg-config \
+            autoconf \
+            automake \
+            libtool \
+            make \
+            bison \
+            flex \
+            gettext \
+            git \
+            curl \
+            wget \
+            jq
+
+      - name: Read tool config from tools.json
+        id: tools
+        run: |
+          echo "llvm_version=$(jq -r '.llvm.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "llvm_url=$(jq -r '.llvm.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "ninja_url=$(jq -r '.ninja.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "cmake_url=$(jq -r '.cmake.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "meson_version=$(jq -r '.meson.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "meson_url=$(jq -r '.meson.url' tools.json)" >> $GITHUB_OUTPUT
+
+      - name: Download and install LLVM
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.llvm_url }}" | tar -xJ
+          sudo mv "LLVM-${{ steps.tools.outputs.llvm_version }}-Linux-X64" /opt/llvm
+          sudo ln -sf /opt/llvm/bin/clang /usr/local/bin/clang
+          sudo ln -sf /opt/llvm/bin/clang++ /usr/local/bin/clang++
+          sudo ln -sf /opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
+          sudo ln -sf /opt/llvm/bin/lld /usr/local/bin/lld
+          sudo ln -sf /opt/llvm/bin/llvm-ar /usr/local/bin/llvm-ar
+          sudo ln -sf /opt/llvm/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
+          sudo ln -sf /opt/llvm/bin/llvm-nm /usr/local/bin/llvm-nm
+          sudo ln -sf /opt/llvm/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
+          sudo ln -sf /opt/llvm/bin/llvm-objdump /usr/local/bin/llvm-objdump
+          sudo ln -sf /opt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
+
+      - name: Download and install Ninja
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.ninja_url }}" -o ninja.zip
+          unzip -q ninja.zip
+          sudo mv ninja /usr/local/bin/ninja
+          sudo chmod +x /usr/local/bin/ninja
+          rm ninja.zip
+
+      - name: Download and install CMake
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.cmake_url }}" | tar -xz
+          sudo mv cmake-*-linux-x86_64 /opt/cmake
+          sudo ln -sf /opt/cmake/bin/cmake /usr/local/bin/cmake
+          sudo ln -sf /opt/cmake/bin/ctest /usr/local/bin/ctest
+          sudo ln -sf /opt/cmake/bin/cpack /usr/local/bin/cpack
+
+      - name: Download and install Meson
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.meson_url }}" | tar -xz
+          sudo mv "meson-${{ steps.tools.outputs.meson_version }}" /opt/meson
+          echo '#!/bin/sh' | sudo tee /usr/local/bin/meson > /dev/null
+          echo 'exec python3 /opt/meson/meson.py "$@"' | sudo tee -a /usr/local/bin/meson > /dev/null
+          sudo chmod +x /usr/local/bin/meson
+
+      - name: Setup sysroot
+        run: |
+          ./sysroots/setup.sh ${{ inputs.distro }}
+
+      - name: Build brotli
+        run: |
+          TARGET_DISTRO=${{ inputs.distro }} \
+          TARGET_ARCH=x86_64 \
+          ./deps/brotli.sh
+
+      - name: Verify build
+        run: |
+          echo "=== Built libraries ==="
+          ls -la out/${{ inputs.distro }}/prefix/lib/*.a
+
+          echo ""
+          echo "=== pkg-config files ==="
+          ls -la out/${{ inputs.distro }}/prefix/lib/pkgconfig/
+
+          echo ""
+          echo "=== Headers ==="
+          ls -la out/${{ inputs.distro }}/prefix/include/brotli/
+
+          echo ""
+          echo "=== Binary test ==="
+          out/${{ inputs.distro }}/prefix/bin/brotli --version
+
+          echo ""
+          echo "=== glibc symbols ==="
+          objdump -T out/${{ inputs.distro }}/prefix/bin/brotli | grep GLIBC_ | sed 's/.*GLIBC_//' | cut -d' ' -f1 | sort -V | uniq
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: brotli-${{ inputs.distro }}
+          path: |
+            out/${{ inputs.distro }}/prefix/lib/libbrotli*.a
+            out/${{ inputs.distro }}/prefix/lib/pkgconfig/libbrotli*.pc
+            out/${{ inputs.distro }}/prefix/include/brotli/
+          retention-days: 90

@@ -14,8 +14,8 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
+log_info() { echo -e "${BLUE}[INFO]${NC} $*" >&2; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*" >&2; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 die() { log_error "$@"; exit 1; }
 
@@ -39,9 +39,9 @@ declare -A DISTRO_CONFIG=(
 # Packages needed for a minimal sysroot
 # These provide glibc headers, kernel headers, and basic development files
 SYSROOT_PACKAGES=(
-    libc6-dev
-    linux-libc-dev
-    libgcc-dev       # May not exist on older distros
+    libc6            # Runtime library (needed for libc.so.6, ld-linux-x86-64.so.2)
+    libc6-dev        # Development headers and static libs
+    linux-libc-dev   # Kernel headers
 )
 
 # Additional packages that may be useful

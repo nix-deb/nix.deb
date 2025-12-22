@@ -11,17 +11,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Logging functions
+# Logging functions - all go to stderr to avoid polluting stdout (used for return values)
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $*"
+    echo -e "${BLUE}[INFO]${NC} $*" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $*"
+    echo -e "${GREEN}[SUCCESS]${NC} $*" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
 }
 
 log_error() {
@@ -83,9 +83,12 @@ setup_clang() {
     fi
 
     # Common flags
+    # -O2 provides good optimization without the risks of -O3
+    # -fPIC is required for position-independent code (needed for static libs linked into shared)
     local common_flags=(
         "--target=$target_triple"
         "--sysroot=$SYSROOT"
+        "-O2"
         "-fPIC"
     )
 
@@ -97,7 +100,8 @@ setup_clang() {
     export CC CXX
     export CFLAGS="${common_flags[*]} ${CFLAGS:-}"
     export CXXFLAGS="${common_flags[*]} ${CXXFLAGS:-}"
-    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -L$PREFIX/lib ${LDFLAGS:-}"
+    # Use lld linker and rtlib=compiler-rt to avoid depending on GCC runtime
+    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -fuse-ld=lld -rtlib=compiler-rt -L$PREFIX/lib ${LDFLAGS:-}"
 
     # For CMake
     export CMAKE_TOOLCHAIN_ARGS=(
