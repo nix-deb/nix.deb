@@ -232,8 +232,9 @@ setup_sysroot() {
         if grep -q "GNU ld script" "$script"; then
             log_info "Patching linker script: $script"
             # Replace absolute paths with sysroot-relative ones (prefix with =)
-            sed -i -E 's|/lib/|/usr/lib/|g' "$script"
-            sed -i -E 's|/usr/lib/|=|/usr/lib/|g' "$script"
+            # We use : as delimiter for sed to avoid escaping / and |
+            sed -i -E 's:/lib/:/usr/lib/:g' "$script"
+            sed -i -E 's:([^=]|^)/usr/lib/:\1=/usr/lib/:g' "$script"
         fi
     done
 
