@@ -153,4 +153,4 @@ jobs:
             out/${{ inputs.distro }}/prefix/lib/pkgconfig/libsodium.pc
             out/${{ inputs.distro }}/prefix/include/sodium.h
             out/${{ inputs.distro }}/prefix/include/sodium/
-          retention-days: 90
+          retention-days: 10
