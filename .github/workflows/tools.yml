@@ -27,19 +27,20 @@ jobs:
             wget \
             jq
 
-      - name: Read tool versions from tools.json
-        id: versions
+      - name: Read tool config from tools.json
+        id: tools
         run: |
           echo "llvm_version=$(jq -r '.llvm.version' tools.json)" >> $GITHUB_OUTPUT
-          echo "ninja_version=$(jq -r '.ninja.version' tools.json)" >> $GITHUB_OUTPUT
-          echo "cmake_version=$(jq -r '.cmake.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "llvm_url=$(jq -r '.llvm.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "ninja_url=$(jq -r '.ninja.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "cmake_url=$(jq -r '.cmake.url' tools.json)" >> $GITHUB_OUTPUT
           echo "meson_version=$(jq -r '.meson.version' tools.json)" >> $GITHUB_OUTPUT
+          echo "meson_url=$(jq -r '.meson.url' tools.json)" >> $GITHUB_OUTPUT
 
       - name: Download and install LLVM
         run: |
-          VERSION="${{ steps.versions.outputs.llvm_version }}"
-          curl -fsSL "https://github.com/llvm/llvm-project/releases/download/llvmorg-${VERSION}/LLVM-${VERSION}-Linux-X64.tar.xz" | tar -xJ
-          sudo mv "LLVM-${VERSION}-Linux-X64" /opt/llvm
+          curl -fsSL "${{ steps.tools.outputs.llvm_url }}" | tar -xJ
+          sudo mv "LLVM-${{ steps.tools.outputs.llvm_version }}-Linux-X64" /opt/llvm
           sudo ln -sf /opt/llvm/bin/clang /usr/local/bin/clang
           sudo ln -sf /opt/llvm/bin/clang++ /usr/local/bin/clang++
           sudo ln -sf /opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
@@ -53,8 +54,7 @@ jobs:
 
       - name: Download and install Ninja
         run: |
-          VERSION="${{ steps.versions.outputs.ninja_version }}"
-          curl -fsSL "https://github.com/ninja-build/ninja/releases/download/v${VERSION}/ninja-linux.zip" -o ninja.zip
+          curl -fsSL "${{ steps.tools.outputs.ninja_url }}" -o ninja.zip
           unzip -q ninja.zip
           sudo mv ninja /usr/local/bin/ninja
           sudo chmod +x /usr/local/bin/ninja
@@ -62,18 +62,16 @@ jobs:
 
       - name: Download and install CMake
         run: |
-          VERSION="${{ steps.versions.outputs.cmake_version }}"
-          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${VERSION}/cmake-${VERSION}-linux-x86_64.tar.gz" | tar -xz
-          sudo mv "cmake-${VERSION}-linux-x86_64" /opt/cmake
+          curl -fsSL "${{ steps.tools.outputs.cmake_url }}" | tar -xz
+          sudo mv cmake-*-linux-x86_64 /opt/cmake
           sudo ln -sf /opt/cmake/bin/cmake /usr/local/bin/cmake
           sudo ln -sf /opt/cmake/bin/ctest /usr/local/bin/ctest
           sudo ln -sf /opt/cmake/bin/cpack /usr/local/bin/cpack
 
       - name: Download and install Meson
         run: |
-          VERSION="${{ steps.versions.outputs.meson_version }}"
-          curl -fsSL "https://github.com/mesonbuild/meson/releases/download/${VERSION}/meson-${VERSION}.tar.gz" | tar -xz
-          sudo mv "meson-${VERSION}" /opt/meson
+          curl -fsSL "${{ steps.tools.outputs.meson_url }}" | tar -xz
+          sudo mv "meson-${{ steps.tools.outputs.meson_version }}" /opt/meson
           echo '#!/bin/sh' | sudo tee /usr/local/bin/meson > /dev/null
           echo 'exec python3 /opt/meson/meson.py "$@"' | sudo tee -a /usr/local/bin/meson > /dev/null
           sudo chmod +x /usr/local/bin/meson

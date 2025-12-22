@@ -21,8 +21,8 @@
         # Pre-extracted in Nix store, shared via 9P to VMs
         llvmVersion = tools.llvm.version;
         llvmSrc = pkgs.fetchzip {
-          url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${llvmVersion}/LLVM-${llvmVersion}-Linux-X64.tar.xz";
-          sha256 = tools.llvm.sha256;
+          url = tools.llvm.url;
+          hash = tools.llvm.hash;
         };
         # Dereference symlinks for 9P sharing (9P can't follow symlinks)
         llvmDir = pkgs.runCommand "llvm-dereferenced" {} ''
@@ -32,8 +32,8 @@
         # Ninja build system
         ninjaVersion = tools.ninja.version;
         ninjaSrc = pkgs.fetchzip {
-          url = "https://github.com/ninja-build/ninja/releases/download/v${ninjaVersion}/ninja-linux.zip";
-          sha256 = tools.ninja.sha256;
+          url = tools.ninja.url;
+          hash = tools.ninja.hash;
           stripRoot = false;
         };
         # Wrap in bin/ directory for consistent structure
@@ -46,15 +46,15 @@
         # CMake
         cmakeVersion = tools.cmake.version;
         cmakeDir = pkgs.fetchzip {
-          url = "https://github.com/Kitware/CMake/releases/download/v${cmakeVersion}/cmake-${cmakeVersion}-linux-x86_64.tar.gz";
-          sha256 = tools.cmake.sha256;
+          url = tools.cmake.url;
+          hash = tools.cmake.hash;
         };
 
         # Meson build system
         mesonVersion = tools.meson.version;
         mesonSrc = pkgs.fetchzip {
-          url = "https://github.com/mesonbuild/meson/releases/download/${mesonVersion}/meson-${mesonVersion}.tar.gz";
-          sha256 = tools.meson.sha256;
+          url = tools.meson.url;
+          hash = tools.meson.hash;
         };
         # Create wrapper script that invokes meson.py
         mesonDir = pkgs.runCommand "meson-wrapped" {} ''
