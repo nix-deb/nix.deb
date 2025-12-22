@@ -8,7 +8,7 @@ let
   '';
 
   # Cloud-init configuration for first boot
-  mkCloudInit = { name, family, codename, llvmVersion }: let
+  mkCloudInit = { name, family, codename, llvmSrc, llvmVersion, ninjaDir, cmakeDir, mesonSrc }: let
     userData = pkgs.writeText "user-data" ''
 #cloud-config
 hostname: ${name}
@@ -19,7 +19,7 @@ users:
 
 package_update: true
 packages:
-  # Build tools (compilers, ninja, cmake, meson from Nix-managed 9P shares)
+  # Build tools (compilers, ninja, cmake, meson from Nix store via virtiofs)
   - python3
   - pkg-config
   - autoconf
@@ -37,35 +37,36 @@ packages:
 
 mounts:
   - [ host_share, /mnt/host, 9p, "trans=virtio,version=9p2000.L,msize=104857600", "0", "0" ]
-  - [ llvm_share, /mnt/llvm, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
-  - [ ninja_share, /mnt/ninja, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
-  - [ cmake_share, /mnt/cmake, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
-  - [ meson_share, /mnt/meson, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
-  - [ mesonbin_share, /mnt/meson-bin, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
+  - [ nix_store, /nix/store, virtiofs, "ro", "0", "0" ]
 
 runcmd:
-  - mkdir -p /mnt/host /mnt/llvm /mnt/ninja /mnt/cmake /mnt/meson /mnt/meson-bin
+  - mkdir -p /mnt/host /nix/store
   - mount -a
-  # Set up symlinks to LLVM tools (pre-extracted in Nix store, shared via 9P)
-  - ln -sf /mnt/llvm/bin/clang /usr/local/bin/clang
-  - ln -sf /mnt/llvm/bin/clang++ /usr/local/bin/clang++
-  - ln -sf /mnt/llvm/bin/clang-cpp /usr/local/bin/clang-cpp
-  - ln -sf /mnt/llvm/bin/ld.lld /usr/local/bin/ld.lld
-  - ln -sf /mnt/llvm/bin/lld /usr/local/bin/lld
-  - ln -sf /mnt/llvm/bin/llvm-ar /usr/local/bin/llvm-ar
-  - ln -sf /mnt/llvm/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
-  - ln -sf /mnt/llvm/bin/llvm-nm /usr/local/bin/llvm-nm
-  - ln -sf /mnt/llvm/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
-  - ln -sf /mnt/llvm/bin/llvm-objdump /usr/local/bin/llvm-objdump
-  - ln -sf /mnt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
-  # Ninja from Nix-managed 9P share
-  - ln -sf /mnt/ninja/bin/ninja /usr/local/bin/ninja
-  # CMake from Nix-managed 9P share
-  - ln -sf /mnt/cmake/bin/cmake /usr/local/bin/cmake
-  - ln -sf /mnt/cmake/bin/ctest /usr/local/bin/ctest
-  - ln -sf /mnt/cmake/bin/cpack /usr/local/bin/cpack
-  # Meson wrapper (calls python3 /mnt/meson/meson.py)
-  - ln -sf /mnt/meson-bin/bin/meson /usr/local/bin/meson
+  # Set up symlinks to LLVM tools (shared via virtiofs at /nix/store)
+  - ln -sf ${llvmSrc}/bin/clang /usr/local/bin/clang
+  - ln -sf ${llvmSrc}/bin/clang++ /usr/local/bin/clang++
+  - ln -sf ${llvmSrc}/bin/clang-cpp /usr/local/bin/clang-cpp
+  - ln -sf ${llvmSrc}/bin/ld.lld /usr/local/bin/ld.lld
+  - ln -sf ${llvmSrc}/bin/lld /usr/local/bin/lld
+  - ln -sf ${llvmSrc}/bin/llvm-ar /usr/local/bin/llvm-ar
+  - ln -sf ${llvmSrc}/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
+  - ln -sf ${llvmSrc}/bin/llvm-nm /usr/local/bin/llvm-nm
+  - ln -sf ${llvmSrc}/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
+  - ln -sf ${llvmSrc}/bin/llvm-objdump /usr/local/bin/llvm-objdump
+  - ln -sf ${llvmSrc}/bin/llvm-strip /usr/local/bin/llvm-strip
+  # Ninja from Nix store via virtiofs
+  - ln -sf ${ninjaDir}/bin/ninja /usr/local/bin/ninja
+  # CMake from Nix store via virtiofs
+  - ln -sf ${cmakeDir}/bin/cmake /usr/local/bin/cmake
+  - ln -sf ${cmakeDir}/bin/ctest /usr/local/bin/ctest
+  - ln -sf ${cmakeDir}/bin/cpack /usr/local/bin/cpack
+  # Meson wrapper script (calls python3 with meson.py from Nix store)
+  - |
+    cat > /usr/local/bin/meson << 'MESON_WRAPPER'
+    #!/bin/sh
+    exec python3 ${mesonSrc}/meson.py "$@"
+    MESON_WRAPPER
+  - chmod +x /usr/local/bin/meson
   # Make clang the default CC/CXX
   - update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
   - update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
@@ -85,7 +86,7 @@ runcmd:
   '';
 
   # Create the VM wrapper script
-  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmDir, ninjaDir, cmakeDir, mesonSrc, mesonDir }:
+  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk }:
     let
       # Working directory for this VM
       vmDir = "$HOME/.cache/nix-deb-vm/${name}";
@@ -93,10 +94,14 @@ runcmd:
       # Base QEMU args (shared between foreground and background)
       qemuBaseArgs = [
         "-name ${name}"
-        "-m 4G"
         "-smp 4"
         "-cpu host"
         "-enable-kvm"
+
+        # Memory with shared backend for virtiofs
+        "-m 4G"
+        "-object memory-backend-memfd,id=mem,size=4G,share=on"
+        "-numa node,memdev=mem"
 
         # Main disk (will be a copy of the cloud image)
         "-drive file=${vmDir}/disk.qcow2,if=virtio,format=qcow2"
@@ -107,18 +112,9 @@ runcmd:
         # 9P share for host files (repo)
         "-virtfs local,path=${hostSharePath},mount_tag=host_share,security_model=mapped-xattr,id=host_share"
 
-        # 9P share for LLVM (pre-extracted in Nix store)
-        "-virtfs local,path=${llvmDir},mount_tag=llvm_share,security_model=mapped-xattr,readonly=on,id=llvm_share"
-
-        # 9P share for Ninja
-        "-virtfs local,path=${ninjaDir},mount_tag=ninja_share,security_model=mapped-xattr,readonly=on,id=ninja_share"
-
-        # 9P share for CMake
-        "-virtfs local,path=${cmakeDir},mount_tag=cmake_share,security_model=mapped-xattr,readonly=on,id=cmake_share"
-
-        # 9P share for Meson (source and wrapper)
-        "-virtfs local,path=${mesonSrc},mount_tag=meson_share,security_model=mapped-xattr,readonly=on,id=meson_share"
-        "-virtfs local,path=${mesonDir},mount_tag=mesonbin_share,security_model=mapped-xattr,readonly=on,id=mesonbin_share"
+        # virtiofs for /nix/store (read-only, shared via virtiofsd)
+        "-chardev socket,id=nix_store,path=${vmDir}/virtiofsd.sock"
+        "-device vhost-user-fs-pci,chardev=nix_store,tag=nix_store"
 
         # Networking with SSH port forward
         "-nic user,hostfwd=tcp:127.0.0.1:2222-:22"
@@ -138,6 +134,8 @@ runcmd:
       VM_DIR="${vmDir}"
       SSH_KEY="${sshKeyPair}/id_ed25519"
       SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -i $SSH_KEY"
+      VIRTIOFSD_SOCKET="$VM_DIR/virtiofsd.sock"
+      VIRTIOFSD_PID_FILE="$VM_DIR/virtiofsd.pid"
 
       # Base image from Nix store
       BASE_IMAGE="${cloudImage}"
@@ -151,6 +149,33 @@ runcmd:
           # Create a CoW overlay on top of the read-only Nix store image
           ${pkgs.qemu}/bin/qemu-img create -f qcow2 -b "$BASE_IMAGE" -F qcow2 "$VM_DIR/disk.qcow2" 20G
         fi
+      }
+
+      # Clean up virtiofsd daemon
+      cleanup_virtiofsd() {
+        if [[ -f "$VIRTIOFSD_PID_FILE" ]]; then
+          kill "$(cat "$VIRTIOFSD_PID_FILE")" 2>/dev/null || true
+          rm -f "$VIRTIOFSD_PID_FILE"
+        fi
+        rm -f "$VIRTIOFSD_SOCKET"
+      }
+
+      # Start virtiofsd daemon for /nix/store
+      start_virtiofsd() {
+        cleanup_virtiofsd  # Clean up any stale processes/sockets
+        echo "Starting virtiofsd for /nix/store..."
+        ${pkgs.virtiofsd}/bin/virtiofsd \
+          --socket-path "$VIRTIOFSD_SOCKET" \
+          --shared-dir /nix/store \
+          --sandbox none &
+        echo $! > "$VIRTIOFSD_PID_FILE"
+        # Wait for socket to be created
+        for i in $(seq 1 50); do
+          [[ -S "$VIRTIOFSD_SOCKET" ]] && return 0
+          sleep 0.1
+        done
+        echo "Error: virtiofsd socket not created"
+        return 1
       }
 
       # Wait for SSH to be available
@@ -170,6 +195,8 @@ runcmd:
       case "''${1:-help}" in
         run)
           init_vm
+          start_virtiofsd
+          trap cleanup_virtiofsd EXIT
           echo "Starting VM ${name}..."
           echo "Press Ctrl-A X to exit QEMU"
           echo ""
@@ -178,10 +205,11 @@ runcmd:
 
         run-bg)
           init_vm
+          start_virtiofsd
           echo "Starting VM ${name} in background..."
           ${qemuBgCmd}
           wait_for_ssh
-          echo "VM running (PID: $(cat "$VM_DIR/qemu.pid"))"
+          echo "VM running (QEMU PID: $(cat "$VM_DIR/qemu.pid"), virtiofsd PID: $(cat "$VIRTIOFSD_PID_FILE"))"
           echo "Serial log: $VM_DIR/serial.log"
           ;;
 
@@ -217,10 +245,9 @@ runcmd:
           if [[ -f "$VM_DIR/qemu.pid" ]]; then
             kill "$(cat "$VM_DIR/qemu.pid")" 2>/dev/null || true
             rm -f "$VM_DIR/qemu.pid"
-            echo "VM stopped"
-          else
-            echo "No running VM found (no PID file)"
           fi
+          cleanup_virtiofsd
+          echo "VM stopped"
           ;;
 
         reset)
@@ -231,9 +258,14 @@ runcmd:
 
         status)
           if [[ -f "$VM_DIR/qemu.pid" ]] && kill -0 "$(cat "$VM_DIR/qemu.pid")" 2>/dev/null; then
-            echo "VM is running (PID: $(cat "$VM_DIR/qemu.pid"))"
+            echo "QEMU: running (PID: $(cat "$VM_DIR/qemu.pid"))"
           else
-            echo "VM is not running"
+            echo "QEMU: not running"
+          fi
+          if [[ -f "$VIRTIOFSD_PID_FILE" ]] && kill -0 "$(cat "$VIRTIOFSD_PID_FILE")" 2>/dev/null; then
+            echo "virtiofsd: running (PID: $(cat "$VIRTIOFSD_PID_FILE"))"
+          else
+            echo "virtiofsd: not running"
           fi
           ;;
 
@@ -263,11 +295,11 @@ runcmd:
     '';
 
   # Main function to create a development VM
-  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmDir, llvmVersion, ninjaDir, ninjaVersion, cmakeDir, cmakeVersion, mesonSrc, mesonDir, mesonVersion }:
+  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmSrc, llvmVersion, ninjaDir, ninjaVersion, cmakeDir, cmakeVersion, mesonSrc, mesonVersion }:
     let
-      cloudInitDisk = mkCloudInit { inherit name family codename llvmVersion; };
+      cloudInitDisk = mkCloudInit { inherit name family codename llvmSrc llvmVersion ninjaDir cmakeDir mesonSrc; };
     in mkVmScript {
-      inherit name cloudImage hostSharePath cloudInitDisk llvmDir ninjaDir cmakeDir mesonSrc mesonDir;
+      inherit name cloudImage hostSharePath cloudInitDisk;
     };
 
 in {

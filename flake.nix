@@ -18,16 +18,12 @@
         tools = builtins.fromJSON (builtins.readFile ./tools.json);
 
         # LLVM/Clang toolchain
-        # Pre-extracted in Nix store, shared via 9P to VMs
+        # Shared via virtiofs to VMs (virtiofs handles symlinks correctly)
         llvmVersion = tools.llvm.version;
         llvmSrc = pkgs.fetchzip {
           url = tools.llvm.url;
           hash = tools.llvm.hash;
         };
-        # Dereference symlinks for 9P sharing (9P can't follow symlinks)
-        llvmDir = pkgs.runCommand "llvm-dereferenced" {} ''
-          cp -rL ${llvmSrc} $out
-        '';
 
         # Ninja build system
         ninjaVersion = tools.ninja.version;
@@ -56,15 +52,6 @@
           url = tools.meson.url;
           hash = tools.meson.hash;
         };
-        # Create wrapper script that invokes meson.py
-        mesonDir = pkgs.runCommand "meson-wrapped" {} ''
-          mkdir -p $out/bin
-          cat > $out/bin/meson << 'WRAPPER'
-          #!/bin/sh
-          exec python3 /mnt/meson/meson.py "$@"
-          WRAPPER
-          chmod +x $out/bin/meson
-        '';
 
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
@@ -92,7 +79,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name llvmDir llvmVersion ninjaDir ninjaVersion cmakeDir cmakeVersion mesonSrc mesonDir mesonVersion;
+          inherit name llvmSrc llvmVersion ninjaDir ninjaVersion cmakeDir cmakeVersion mesonSrc mesonVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;
@@ -110,6 +97,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             qemu
+            virtiofsd    # for virtiofs mounts
             cloud-utils  # for cloud-localds
             openssh
             coreutils
