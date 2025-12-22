@@ -149,6 +149,105 @@ Lix also uses Meson. Similar investigation needed:
 - Custom dependency paths
 - Static linking configuration
 
+## Development Workflow
+
+### The Problem
+
+Development machines (NixOS, macOS) don't match the target environment (Debian/Ubuntu).
+We need to:
+- Iterate quickly on build scripts
+- Avoid path dependence (something "works" only because of prior experimentation steps)
+- Have high fidelity to the actual target environment
+
+### The Solution: Nix-built QEMU VMs with btrfs snapshots
+
+We use Nix to build minimal QEMU VM images for each target distribution. This gives us:
+
+1. **Reproducible VM images** - Version controlled, rebuildable from scratch
+2. **Fast iteration via btrfs snapshots** - Instant rollback to clean state
+3. **High fidelity** - Real Debian/Ubuntu, not containers
+4. **No networking required** - 9P filesystem shares data between host and guest
+5. **Works everywhere** - NixOS, macOS (via lima or native QEMU)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Host (NixOS/macOS)                       │
+│                                                                  │
+│  ┌──────────────────┐    ┌─────────────────────────────────┐    │
+│  │   Nix builds:    │    │         QEMU VM (Debian)        │    │
+│  │  - VM image      │    │  ┌─────────────────────────┐    │    │
+│  │  - Source tars   │───▶│  │  /mnt/host (9P mount)   │    │    │
+│  │  - Build scripts │    │  │  - sources/             │    │    │
+│  │                  │    │  │  - scripts/             │    │    │
+│  └──────────────────┘    │  │  - output/              │    │    │
+│                          │  └─────────────────────────┘    │    │
+│                          │                                  │    │
+│  ┌──────────────────┐    │  btrfs root:                    │    │
+│  │ Snapshot manager │───▶│  - instant rollback             │    │
+│  │  vm snapshot     │    │  - verify from clean state      │    │
+│  │  vm restore      │    │                                  │    │
+│  │  vm run          │    └─────────────────────────────────┘    │
+│  └──────────────────┘                                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Workflow
+
+```bash
+# 1. Build the VM image for a target distro
+nix build .#vm-debian-bookworm
+
+# 2. Start the VM (creates initial btrfs snapshot)
+./result/bin/vm run
+
+# 3. Inside VM: run build scripts from 9P mount
+cd /mnt/host
+./deps/zlib.sh
+
+# 4. Iterate, experiment, debug...
+
+# 5. Think you have it working? Restore and verify:
+./result/bin/vm restore    # instant rollback to clean state
+./result/bin/vm run
+# Run the "final" command only - if it works from clean, it's real
+
+# 6. Once verified, commit the build script
+```
+
+### Implementation Plan
+
+#### Phase 0: VM Infrastructure (before Phase 1)
+
+- [ ] `nix/vm/base.nix` - Common VM configuration (QEMU, btrfs, 9P)
+- [ ] `nix/vm/debian.nix` - Debian-specific image builder
+- [ ] `nix/vm/ubuntu.nix` - Ubuntu-specific image builder
+- [ ] `nix/vm/snapshot.sh` - Snapshot management wrapper
+- [ ] `nix/sources.nix` - Fetch all dependency source tarballs
+- [ ] `flake.nix` - Expose VM images as flake outputs
+
+Each VM image includes:
+- Minimal base system (debootstrap or equivalent)
+- build-essential, clang, cmake, meson, ninja
+- btrfs-progs (for snapshot support)
+- No networking configured (intentionally isolated)
+
+The 9P share provides:
+- Source tarballs (fetched by Nix, content-addressed)
+- Build scripts (this repository)
+- Output directory (for built artifacts)
+
+#### Verification Gate
+
+Before marking any build script as complete:
+1. `vm restore` to clean state
+2. Run the build script
+3. If it succeeds from clean, it's verified
+4. Push to GitHub and confirm CI passes (non-interactive GitHub Actions)
+
+This two-stage verification catches:
+- Path dependence from local experimentation
+- Any remaining differences between VM and GitHub Actions environment
+
 ## Open Questions
 
 1. **AWS SDK**: Is S3 binary cache support required? The AWS SDK is large and has many sub-dependencies. We could make this optional.
@@ -158,5 +257,3 @@ Lix also uses Meson. Similar investigation needed:
 3. **ICU**: Can Nix function without full ICU support, or is there a minimal subset we can use?
 
 4. **Boost subset**: Which Boost libraries does Nix actually use? We should only build those.
-
-5. **Test strategy**: How do we verify the built packages work correctly on target distributions without spinning up VMs for each?
