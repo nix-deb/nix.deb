@@ -1,0 +1,210 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'Distribution to build (or "all")'
+        required: false
+        default: 'all'
+      package:
+        description: 'Package to build'
+        required: false
+        default: 'nix'
+        type: choice
+        options:
+          - nix
+          - lix
+          - both
+
+env:
+  DEBIAN_DISTROS: stretch buster bullseye bookworm trixie
+  UBUNTU_DISTROS: xenial bionic focal jammy noble
+
+jobs:
+  # Generate the build matrix
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          distros=()
+
+          # Determine which distros to build
+          input_distro="${{ github.event.inputs.distro || 'all' }}"
+
+          if [[ "$input_distro" == "all" ]]; then
+            for d in $DEBIAN_DISTROS; do
+              distros+=("debian-$d")
+            done
+            for d in $UBUNTU_DISTROS; do
+              distros+=("ubuntu-$d")
+            done
+          else
+            distros+=("$input_distro")
+          fi
+
+          # Determine which packages to build
+          input_pkg="${{ github.event.inputs.package || 'nix' }}"
+          packages=()
+          if [[ "$input_pkg" == "both" ]]; then
+            packages=("nix" "lix")
+          else
+            packages=("$input_pkg")
+          fi
+
+          # Generate JSON matrix
+          matrix='{"include":['
+          first=true
+          for distro in "${distros[@]}"; do
+            for pkg in "${packages[@]}"; do
+              if [[ "$first" == "true" ]]; then
+                first=false
+              else
+                matrix+=','
+              fi
+              matrix+="{\"distro\":\"$distro\",\"package\":\"$pkg\"}"
+            done
+          done
+          matrix+=']}'
+
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  # Build dependencies and packages
+  build:
+    needs: matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang \
+            lld \
+            llvm \
+            cmake \
+            ninja-build \
+            meson \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            bison \
+            flex \
+            gettext \
+            dpkg-dev \
+            fakeroot
+
+      - name: Cache sysroot
+        uses: actions/cache@v4
+        with:
+          path: sysroots/${{ matrix.distro }}
+          key: sysroot-${{ matrix.distro }}-v1
+
+      - name: Cache build dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            out/${{ matrix.distro }}/prefix
+            out/sources
+          key: deps-${{ matrix.distro }}-${{ matrix.package }}-${{ hashFiles('deps/*.sh') }}
+          restore-keys: |
+            deps-${{ matrix.distro }}-${{ matrix.package }}-
+            deps-${{ matrix.distro }}-
+
+      - name: Setup sysroot
+        run: |
+          ./sysroots/setup.sh ${{ matrix.distro }}
+
+      - name: Build
+        run: |
+          ./build.sh \
+            --distro $(echo ${{ matrix.distro }} | sed 's/-/:/' ) \
+            --package ${{ matrix.package }}
+
+      - name: Check glibc symbols
+        run: |
+          # Find the built binary and check its glibc requirements
+          binary="out/${{ matrix.distro }}/prefix/bin/${{ matrix.package }}"
+          if [[ -f "$binary" ]]; then
+            echo "Checking glibc symbols in $binary"
+            objdump -T "$binary" | grep GLIBC_ | sed 's/.*GLIBC_//' | sort -V | uniq | tail -5
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}-${{ matrix.distro }}
+          path: |
+            out/${{ matrix.distro }}/*.deb
+          if-no-files-found: warn
+
+  # Create release with .deb files
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*.deb
+          generate_release_notes: true
+
+  # Update apt repository on GitHub Pages
+  publish-apt:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Setup GPG
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+          echo "${{ secrets.GPG_PUBLIC_KEY }}" > apt/key.gpg
+
+      - name: Generate apt repository
+        run: |
+          ./apt/generate.sh artifacts
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apt/repo
+          cname: nix-deb.github.io

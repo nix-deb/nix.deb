@@ -1,0 +1,22 @@
+# Claude Code
+.claude/
+
+# Build outputs
+out/
+sysroots/*/
+sysroots/.cache/
+sysroots/meson-cross-*.ini
+
+# apt repository output
+apt/repo/
+apt/key.gpg
+
+# Editor
+*~
+*.swp
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
