@@ -9,12 +9,18 @@ on:
         default: 'debian-bookworm'
         type: choice
         options:
-          - debian-bookworm
-          - debian-bullseye
+          # Debian (oldest to newest)
+          - debian-stretch
           - debian-buster
-          - ubuntu-noble
-          - ubuntu-jammy
+          - debian-bullseye
+          - debian-bookworm
+          - debian-trixie
+          # Ubuntu (oldest to newest)
+          - ubuntu-xenial
+          - ubuntu-bionic
           - ubuntu-focal
+          - ubuntu-jammy
+          - ubuntu-noble
 
 jobs:
   build:
