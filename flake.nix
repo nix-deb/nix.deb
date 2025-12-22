@@ -26,6 +26,20 @@
           cp -rL ${llvmSrc} $out
         '';
 
+        # Ninja build system (newer than distro packages)
+        ninjaVersion = "1.13.2";
+        ninjaSrc = pkgs.fetchzip {
+          url = "https://github.com/ninja-build/ninja/releases/download/v${ninjaVersion}/ninja-linux.zip";
+          sha256 = "sha256-DKUkXZEIAjZ4KSajXfvDMqQlEEq8mt2v8Yd9Ly73F1A=";
+          stripRoot = false;
+        };
+        # Wrap in bin/ directory for consistent structure
+        ninjaDir = pkgs.runCommand "ninja-wrapped" {} ''
+          mkdir -p $out/bin
+          cp ${ninjaSrc}/ninja $out/bin/
+          chmod +x $out/bin/ninja
+        '';
+
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
           debian-bookworm = pkgs.fetchurl {
@@ -52,7 +66,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name llvmDir llvmVersion;
+          inherit name llvmDir llvmVersion ninjaDir ninjaVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;
