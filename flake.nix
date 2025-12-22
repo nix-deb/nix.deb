@@ -15,11 +15,16 @@
         vmLib = import ./nix/vm { inherit pkgs; };
 
         # LLVM/Clang toolchain (single version for all distros)
+        # Pre-extracted in Nix store, shared via 9P to VMs
         llvmVersion = "21.1.8";
-        llvmTarball = pkgs.fetchurl {
+        llvmSrc = pkgs.fetchzip {
           url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-${llvmVersion}/LLVM-${llvmVersion}-Linux-X64.tar.xz";
-          sha256 = "0avkfnsx2j9vms8mn0rg3jq2bl4l56c76g7amhv0gm8m3n0g5dxk";
+          sha256 = "12g4p8zr4yff8l6pgpr4d3aalzflv5f1jh5pnlh8p778kay5azgk";
         };
+        # Dereference symlinks for 9P sharing (9P can't follow symlinks)
+        llvmDir = pkgs.runCommand "llvm-dereferenced" {} ''
+          cp -rL ${llvmSrc} $out
+        '';
 
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
@@ -47,7 +52,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name llvmTarball llvmVersion;
+          inherit name llvmDir llvmVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;
