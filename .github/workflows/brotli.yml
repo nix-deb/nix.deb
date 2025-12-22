@@ -135,4 +135,4 @@ jobs:
             out/${{ inputs.distro }}/prefix/lib/libbrotli*.a
             out/${{ inputs.distro }}/prefix/lib/pkgconfig/libbrotli*.pc
             out/${{ inputs.distro }}/prefix/include/brotli/
-          retention-days: 90
+          retention-days: 10
