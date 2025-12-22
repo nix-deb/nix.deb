@@ -1,11 +1,8 @@
 name: Build
 
+# NOTE: Disabled automatic triggers until build pipeline is complete.
+# Re-enable push/PR triggers when all dependencies are building successfully.
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       distro:
