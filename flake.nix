@@ -47,6 +47,22 @@
           sha256 = "1pbh3fs92l3smcnv0qn39lbhl7awl2vnqmj2fgmk88in4ra0k5nc";
         };
 
+        # Meson build system (newer than distro packages)
+        mesonVersion = "1.10.0";
+        mesonSrc = pkgs.fetchzip {
+          url = "https://github.com/mesonbuild/meson/releases/download/${mesonVersion}/meson-${mesonVersion}.tar.gz";
+          sha256 = "1dkmb94xri5gdcnmbxxc96i1z5rxvczi4ply1lwxdydga5amwhsh";
+        };
+        # Create wrapper script that sets PYTHONPATH
+        mesonDir = pkgs.runCommand "meson-wrapped" {} ''
+          mkdir -p $out/bin
+          cat > $out/bin/meson << 'WRAPPER'
+          #!/bin/sh
+          exec python3 /mnt/meson/meson.py "$@"
+          WRAPPER
+          chmod +x $out/bin/meson
+        '';
+
         # Fetch cloud images (cached in Nix store)
         cloudImages = {
           debian-bookworm = pkgs.fetchurl {
@@ -73,7 +89,7 @@
 
         # Generate VM package for each distro
         mkVm = name: config: vmLib.mkDevVm {
-          inherit name llvmDir llvmVersion ninjaDir ninjaVersion cmakeDir cmakeVersion;
+          inherit name llvmDir llvmVersion ninjaDir ninjaVersion cmakeDir cmakeVersion mesonSrc mesonDir mesonVersion;
           inherit (config) family codename version;
           cloudImage = cloudImages.${name};
           hostSharePath = toString self;

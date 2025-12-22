@@ -19,8 +19,8 @@ users:
 
 package_update: true
 packages:
-  # Build tools (compilers, ninja, cmake from Nix-managed 9P shares)
-  - meson
+  # Build tools (compilers, ninja, cmake, meson from Nix-managed 9P shares)
+  - python3
   - pkg-config
   - autoconf
   - automake
@@ -40,9 +40,11 @@ mounts:
   - [ llvm_share, /mnt/llvm, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
   - [ ninja_share, /mnt/ninja, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
   - [ cmake_share, /mnt/cmake, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
+  - [ meson_share, /mnt/meson, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
+  - [ mesonbin_share, /mnt/meson-bin, 9p, "trans=virtio,version=9p2000.L,ro", "0", "0" ]
 
 runcmd:
-  - mkdir -p /mnt/host /mnt/llvm /mnt/ninja /mnt/cmake
+  - mkdir -p /mnt/host /mnt/llvm /mnt/ninja /mnt/cmake /mnt/meson /mnt/meson-bin
   - mount -a
   # Set up symlinks to LLVM tools (pre-extracted in Nix store, shared via 9P)
   - ln -sf /mnt/llvm/bin/clang /usr/local/bin/clang
@@ -62,6 +64,8 @@ runcmd:
   - ln -sf /mnt/cmake/bin/cmake /usr/local/bin/cmake
   - ln -sf /mnt/cmake/bin/ctest /usr/local/bin/ctest
   - ln -sf /mnt/cmake/bin/cpack /usr/local/bin/cpack
+  # Meson wrapper (calls python3 /mnt/meson/meson.py)
+  - ln -sf /mnt/meson-bin/bin/meson /usr/local/bin/meson
   # Make clang the default CC/CXX
   - update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
   - update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
@@ -81,7 +85,7 @@ runcmd:
   '';
 
   # Create the VM wrapper script
-  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmDir, ninjaDir, cmakeDir }:
+  mkVmScript = { name, cloudImage, hostSharePath, cloudInitDisk, llvmDir, ninjaDir, cmakeDir, mesonSrc, mesonDir }:
     let
       # Working directory for this VM
       vmDir = "$HOME/.cache/nix-deb-vm/${name}";
@@ -111,6 +115,10 @@ runcmd:
 
         # 9P share for CMake
         "-virtfs local,path=${cmakeDir},mount_tag=cmake_share,security_model=mapped-xattr,readonly=on,id=cmake_share"
+
+        # 9P share for Meson (source and wrapper)
+        "-virtfs local,path=${mesonSrc},mount_tag=meson_share,security_model=mapped-xattr,readonly=on,id=meson_share"
+        "-virtfs local,path=${mesonDir},mount_tag=mesonbin_share,security_model=mapped-xattr,readonly=on,id=mesonbin_share"
 
         # Networking with SSH port forward
         "-nic user,hostfwd=tcp:127.0.0.1:2222-:22"
@@ -324,11 +332,11 @@ TOOLS_SCRIPT
     '';
 
   # Main function to create a development VM
-  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmDir, llvmVersion, ninjaDir, ninjaVersion, cmakeDir, cmakeVersion }:
+  mkDevVm = { name, family, codename, version, cloudImage, hostSharePath, llvmDir, llvmVersion, ninjaDir, ninjaVersion, cmakeDir, cmakeVersion, mesonSrc, mesonDir, mesonVersion }:
     let
       cloudInitDisk = mkCloudInit { inherit name family codename llvmVersion; };
     in mkVmScript {
-      inherit name cloudImage hostSharePath cloudInitDisk llvmDir ninjaDir cmakeDir;
+      inherit name cloudImage hostSharePath cloudInitDisk llvmDir ninjaDir cmakeDir mesonSrc mesonDir;
     };
 
 in {
