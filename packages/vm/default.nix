@@ -1,12 +1,9 @@
-{ pkgs }:
+{ pkgs, perSystem, ... }:
+let
+  sshKeyPair = perSystem.self.vm-ssh-key;
+in
 
 let
-  # Generate an SSH keypair for VM access
-  sshKeyPair = pkgs.runCommand "vm-ssh-key" {} ''
-    mkdir -p $out
-    ${pkgs.openssh}/bin/ssh-keygen -t ed25519 -f $out/id_ed25519 -N "" -C "nix-deb-vm"
-  '';
-
   # Cloud-init configuration for first boot
   mkCloudInit = { name, family, codename, llvmSrc, llvmVersion, ninjaDir, cmakeDir, mesonSrc }: let
     userData = pkgs.writeText "user-data" ''
@@ -303,5 +300,5 @@ runcmd:
     };
 
 in {
-  inherit mkDevVm sshKeyPair;
+  inherit mkDevVm;
 }
