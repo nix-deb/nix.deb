@@ -7,7 +7,7 @@
   "ninja": {
     "version": "1.13.2",
     "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux.zip",
-    "hash": "sha256-DKUkXZEIAjZ4KSajXfvDMqQlEEq8mt2v8Yd9Ly73F1A="
+    "hash": "sha256-0UoCwDZUeiO+ZZz1VbqhaQNyqtkFZZ8Vp+KZGee7H8A="
   },
   "cmake": {
     "version": "4.2.1",
