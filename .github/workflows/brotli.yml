@@ -54,13 +54,51 @@ jobs:
           echo "llvm_url=$(jq -r '.llvm.url' tools.json)" >> $GITHUB_OUTPUT
           echo "ninja_url=$(jq -r '.ninja.url' tools.json)" >> $GITHUB_OUTPUT
           echo "cmake_url=$(jq -r '.cmake.url' tools.json)" >> $GITHUB_OUTPUT
+          echo "cmake_version=$(jq -r '.cmake.version' tools.json)" >> $GITHUB_OUTPUT
           echo "meson_version=$(jq -r '.meson.version' tools.json)" >> $GITHUB_OUTPUT
           echo "meson_url=$(jq -r '.meson.url' tools.json)" >> $GITHUB_OUTPUT
 
+      - name: Cache build tools
+        id: cache-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/llvm
+            /opt/cmake
+            /opt/meson
+            /opt/ninja
+          key: build-tools-${{ hashFiles('tools.json') }}
+
       - name: Download and install LLVM
+        if: steps.cache-tools.outputs.cache-hit != 'true'
         run: |
           curl -fsSL "${{ steps.tools.outputs.llvm_url }}" | tar -xJ
           sudo mv "LLVM-${{ steps.tools.outputs.llvm_version }}-Linux-X64" /opt/llvm
+
+      - name: Download and install Ninja
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.ninja_url }}" -o ninja.zip
+          unzip -q ninja.zip
+          sudo mkdir -p /opt/ninja
+          sudo mv ninja /opt/ninja/ninja
+          rm ninja.zip
+
+      - name: Download and install CMake
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.cmake_url }}" | tar -xz
+          sudo mv cmake-${{ steps.tools.outputs.cmake_version }}-linux-x86_64 /opt/cmake
+
+      - name: Download and install Meson
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "${{ steps.tools.outputs.meson_url }}" | tar -xz
+          sudo mv "meson-${{ steps.tools.outputs.meson_version }}" /opt/meson
+
+      - name: Setup tool symlinks
+        run: |
+          # LLVM
           sudo ln -sf /opt/llvm/bin/clang /usr/local/bin/clang
           sudo ln -sf /opt/llvm/bin/clang++ /usr/local/bin/clang++
           sudo ln -sf /opt/llvm/bin/ld.lld /usr/local/bin/ld.lld
@@ -71,27 +109,13 @@ jobs:
           sudo ln -sf /opt/llvm/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
           sudo ln -sf /opt/llvm/bin/llvm-objdump /usr/local/bin/llvm-objdump
           sudo ln -sf /opt/llvm/bin/llvm-strip /usr/local/bin/llvm-strip
-
-      - name: Download and install Ninja
-        run: |
-          curl -fsSL "${{ steps.tools.outputs.ninja_url }}" -o ninja.zip
-          unzip -q ninja.zip
-          sudo mv ninja /usr/local/bin/ninja
-          sudo chmod +x /usr/local/bin/ninja
-          rm ninja.zip
-
-      - name: Download and install CMake
-        run: |
-          curl -fsSL "${{ steps.tools.outputs.cmake_url }}" | tar -xz
-          sudo mv cmake-*-linux-x86_64 /opt/cmake
+          # Ninja
+          sudo ln -sf /opt/ninja/ninja /usr/local/bin/ninja
+          # CMake
           sudo ln -sf /opt/cmake/bin/cmake /usr/local/bin/cmake
           sudo ln -sf /opt/cmake/bin/ctest /usr/local/bin/ctest
           sudo ln -sf /opt/cmake/bin/cpack /usr/local/bin/cpack
-
-      - name: Download and install Meson
-        run: |
-          curl -fsSL "${{ steps.tools.outputs.meson_url }}" | tar -xz
-          sudo mv "meson-${{ steps.tools.outputs.meson_version }}" /opt/meson
+          # Meson
           echo '#!/bin/sh' | sudo tee /usr/local/bin/meson > /dev/null
           echo 'exec python3 /opt/meson/meson.py "$@"' | sudo tee -a /usr/local/bin/meson > /dev/null
           sudo chmod +x /usr/local/bin/meson
