@@ -104,19 +104,29 @@ Nix uses Meson. Lix also uses Meson. Both will need careful configuration to:
 
 ### glibc Compatibility
 
-Target glibc versions by distribution:
-- Ubuntu 16.04 (Xenial): glibc 2.23
-- Ubuntu 18.04 (Bionic): glibc 2.27
-- Debian 9 (Stretch): glibc 2.24
-- Debian 10 (Buster): glibc 2.28
-- Ubuntu 20.04 (Focal): glibc 2.31
-- Debian 11 (Bullseye): glibc 2.31
-- Ubuntu 22.04 (Jammy): glibc 2.35
-- Debian 12 (Bookworm): glibc 2.36
-- Ubuntu 24.04 (Noble): glibc 2.39
-- Debian 13 (Trixie): glibc 2.40
+Each distribution gets its own complete build targeting its native glibc version:
 
-The oldest target is glibc 2.23. All binaries must avoid symbols newer than this.
+| Distribution | glibc | Notes |
+|--------------|-------|-------|
+| Debian 9 (Stretch) | 2.24 | oldoldstable |
+| Ubuntu 16.04 (Xenial) | 2.23 | ESM |
+| Ubuntu 18.04 (Bionic) | 2.27 | ESM |
+| Debian 10 (Buster) | 2.28 | oldstable |
+| Ubuntu 20.04 (Focal) | 2.31 | LTS |
+| Debian 11 (Bullseye) | 2.31 | oldstable |
+| Ubuntu 22.04 (Jammy) | 2.35 | LTS |
+| Debian 12 (Bookworm) | 2.36 | stable |
+| Ubuntu 24.04 (Noble) | 2.39 | LTS |
+| Debian 13 (Trixie) | 2.40 | testing |
+
+This means 10 complete builds (all dependencies + Nix/Lix) for each release. The apt
+repository structure naturally scopes packages by codename, so users get binaries
+optimized for their specific distribution rather than a lowest-common-denominator build.
+
+Benefits:
+- Newer distros can use newer glibc features
+- No artificial constraints from oldest target
+- Packages are truly native to each distribution
 
 ### Static Linking Concerns
 
