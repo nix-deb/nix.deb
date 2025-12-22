@@ -1,9 +1,7 @@
-{ pkgs, ... }:
+{ pkgs, perSystem, ... }:
 let
-  tools = builtins.fromJSON (builtins.readFile ../../tools.json);
   ninjaSrc = pkgs.fetchzip {
-    url = tools.ninja.url;
-    hash = tools.ninja.hash;
+    inherit (perSystem.self.tools-json.ninja) url hash;
     stripRoot = false;
   };
 in pkgs.runCommand "ninja-wrapped" {} ''

@@ -1,6 +1,6 @@
 { pkgs, inputs, perSystem, ... }:
 let
-  tools = builtins.fromJSON (builtins.readFile ../tools.json);
+  tools = perSystem.self.tools-json;
   vmLib = import ./vm { inherit pkgs; };
   cloudImage = pkgs.fetchurl {
     url = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2";

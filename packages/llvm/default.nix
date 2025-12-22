@@ -1,7 +1,4 @@
-{ pkgs, ... }:
-let
-  tools = builtins.fromJSON (builtins.readFile ../../tools.json);
-in pkgs.fetchzip {
-  url = tools.llvm.url;
-  hash = tools.llvm.hash;
+{ pkgs, perSystem, ... }:
+pkgs.fetchzip {
+  inherit (perSystem.self.tools-json.llvm) url hash;
 }

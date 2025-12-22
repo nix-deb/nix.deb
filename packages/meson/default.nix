@@ -1,7 +1,4 @@
-{ pkgs, ... }:
-let
-  tools = builtins.fromJSON (builtins.readFile ../../tools.json);
-in pkgs.fetchzip {
-  url = tools.meson.url;
-  hash = tools.meson.hash;
+{ pkgs, perSystem, ... }:
+pkgs.fetchzip {
+  inherit (perSystem.self.tools-json.meson) url hash;
 }
