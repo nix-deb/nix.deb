@@ -205,27 +205,37 @@ setup_sysroot() {
         fi
     done
 
-    # Fix up linker scripts (libc.so, libpthread.so) to use sysroot-relative paths
-    # These text files often contain absolute paths like /lib/x86_64-linux-gnu/libc.so.6
-    # We need to prefix them with '=' to tell the linker to look in the sysroot
-    log_info "Fixing linker scripts..."
-    find "$sysroot" -name "*.so" -type f | while read -r script; do
-        if grep -q "GNU ld script" "$script"; then
-            log_info "Patching linker script: $script"
-            sed -i 's| /lib/| =/lib/|g' "$script"
-            sed -i 's| /usr/lib/| =/usr/lib/|g' "$script"
-        fi
-    done
-
     # Create standard directory structure if missing
     mkdir -p "$sysroot/usr/lib"
     mkdir -p "$sysroot/usr/include"
 
-    # Some distros put things in /lib instead of /usr/lib
-    # Create symlinks to normalize
-    if [[ -d "$sysroot/lib" && ! -L "$sysroot/lib" ]]; then
-        cp -a "$sysroot/lib/"* "$sysroot/usr/lib/" 2>/dev/null || true
-    fi
+    # Normalize /lib and /lib64 to point to /usr/lib
+    # Newer distros have /lib as a symlink to /usr/lib, but we handle it manually here
+    # to ensure consistency across all supported target distros.
+    for libdir in lib lib64; do
+        if [[ -d "$sysroot/$libdir" && ! -L "$sysroot/$libdir" ]]; then
+            # If it's a real directory, move its contents to /usr/lib and make it a symlink
+            cp -a "$sysroot/$libdir/"* "$sysroot/usr/lib/" 2>/dev/null || true
+            rm -rf "$sysroot/$libdir"
+            ln -sf usr/lib "$sysroot/$libdir"
+        elif [[ ! -e "$sysroot/$libdir" ]]; then
+            ln -sf usr/lib "$sysroot/$libdir"
+        fi
+    done
+
+    # Fix up linker scripts (libc.so, libpthread.so) to use sysroot-relative paths
+    # These text files often contain absolute paths like /lib/x86_64-linux-gnu/libc.so.6
+    # We need to prefix them with '=' to tell the linker to look in the sysroot.
+    # We do this AFTER normalization so paths are consistent.
+    log_info "Fixing linker scripts..."
+    find "$sysroot" -name "*.so" -type f | while read -r script; do
+        if grep -q "GNU ld script" "$script"; then
+            log_info "Patching linker script: $script"
+            # Replace absolute paths with sysroot-relative ones (prefix with =)
+            sed -i -E 's|/lib/|/usr/lib/|g' "$script"
+            sed -i -E 's|/usr/lib/|=|/usr/lib/|g' "$script"
+        fi
+    done
 
     log_success "Sysroot created at $sysroot"
 
