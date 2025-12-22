@@ -24,7 +24,7 @@ die() { log_error "$@"; exit 1; }
 declare -A DISTRO_CONFIG=(
     # Debian
     ["debian-stretch"]="stretch|http://archive.debian.org/debian|main|amd64"
-    ["debian-buster"]="buster|http://deb.debian.org/debian|main|amd64"
+    ["debian-buster"]="buster|http://archive.debian.org/debian|main|amd64"
     ["debian-bullseye"]="bullseye|http://deb.debian.org/debian|main|amd64"
     ["debian-bookworm"]="bookworm|http://deb.debian.org/debian|main|amd64"
     ["debian-trixie"]="trixie|http://deb.debian.org/debian|main|amd64"
