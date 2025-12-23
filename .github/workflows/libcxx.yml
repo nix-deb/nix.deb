@@ -1,0 +1,30 @@
+name: Build libcxx
+
+on:
+  workflow_dispatch:
+    inputs:
+      distro:
+        description: 'Target distribution'
+        required: true
+        default: 'debian-bookworm'
+        type: choice
+        options:
+          # Debian (oldest to newest)
+          - debian-stretch
+          - debian-buster
+          - debian-bullseye
+          - debian-bookworm
+          - debian-trixie
+          # Ubuntu (oldest to newest)
+          - ubuntu-xenial
+          - ubuntu-bionic
+          - ubuntu-focal
+          - ubuntu-jammy
+          - ubuntu-noble
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-one.yml
+    with:
+      dependency: libcxx
+      distro: ${{ inputs.distro }}

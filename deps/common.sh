@@ -97,7 +97,13 @@ setup_clang() {
     export LLVM_ROOT
 
     # LLVM libc++ library path (used instead of libstdc++)
-    local llvm_libdir="$LLVM_ROOT/lib/x86_64-unknown-linux-gnu"
+    # Prefer PREFIX's libc++ (built from source) over LLVM_ROOT's pre-built
+    local cxx_libdir
+    if [[ -f "$PREFIX/lib/libc++.a" ]]; then
+        cxx_libdir="$PREFIX/lib"
+    else
+        cxx_libdir="$LLVM_ROOT/lib/x86_64-unknown-linux-gnu"
+    fi
 
     # Common flags
     # -O2 provides good optimization without the risks of -O3
@@ -119,8 +125,8 @@ setup_clang() {
     # Use libc++ (LLVM's C++ standard library) instead of libstdc++
     export CXXFLAGS="${common_flags[*]} -stdlib=libc++ ${CXXFLAGS:-}"
     # Use lld linker and rtlib=compiler-rt to avoid depending on GCC runtime
-    # Use libc++ and provide path to LLVM's libc++ libraries
-    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -fuse-ld=lld -rtlib=compiler-rt -stdlib=libc++ -L$llvm_libdir -L$PREFIX/lib ${LDFLAGS:-}"
+    # Use libc++ and provide path to libc++ libraries (PREFIX or LLVM_ROOT)
+    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -fuse-ld=lld -rtlib=compiler-rt -stdlib=libc++ -L$cxx_libdir -L$PREFIX/lib ${LDFLAGS:-}"
 
     # For CMake
     export CMAKE_TOOLCHAIN_ARGS=(

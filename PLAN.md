@@ -21,6 +21,7 @@ Build Nix and Lix from source for Debian/Ubuntu with only glibc as a runtime dep
 Create build scripts for all remaining dependencies. Each script follows the pattern in `deps/common.sh`.
 
 #### Tier 0 (no dependencies)
+- [x] `deps/libcxx.sh` - LLVM C++ runtime (libunwind, libc++abi, libc++) - **must build first**
 - [x] `deps/brotli.sh` - Brotli compression
 - [x] `deps/libsodium.sh` - Cryptography (Nix only)
 - [x] `deps/libblake3.sh` - BLAKE3 hashing (Nix only)
