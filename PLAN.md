@@ -23,11 +23,11 @@ Create build scripts for all remaining dependencies. Each script follows the pat
 #### Tier 0 (no dependencies)
 - [x] `deps/brotli.sh` - Brotli compression
 - [x] `deps/libsodium.sh` - Cryptography (Nix only)
-- [ ] `deps/libblake3.sh` - BLAKE3 hashing (Nix only)
-- [ ] `deps/libcpuid.sh` - CPU feature detection
-- [ ] `deps/libseccomp.sh` - Sandboxing
-- [ ] `deps/attr.sh` - Extended attributes
-- [ ] `deps/libunistring.sh` - Unicode strings
+- [x] `deps/libblake3.sh` - BLAKE3 hashing (Nix only)
+- [x] `deps/libcpuid.sh` - CPU feature detection
+- [x] `deps/libseccomp.sh` - Sandboxing
+- [x] `deps/attr.sh` - Extended attributes
+- [x] `deps/libunistring.sh` - Unicode strings
 
 #### Tier 1 (depends on Tier 0)
 - [ ] `deps/acl.sh` - Access control lists (depends on attr)
