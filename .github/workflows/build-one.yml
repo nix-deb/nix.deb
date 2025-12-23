@@ -25,6 +25,16 @@ on:
           - ubuntu-focal
           - ubuntu-jammy
           - ubuntu-noble
+  workflow_call:
+    inputs:
+      dependency:
+        description: 'Dependency to build (name of script in deps/)'
+        required: true
+        type: string
+      distro:
+        description: 'Target distribution'
+        required: true
+        type: string
 
 jobs:
   build:
