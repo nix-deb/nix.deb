@@ -1,0 +1,56 @@
+#cloud-config
+hostname: @hostname@
+users:
+  - name: root
+    ssh_authorized_keys:
+      - @ssh-key@
+
+package_update: true
+packages:
+  # Build tools (compilers, ninja, cmake, meson from Nix store via virtiofs)
+  - python3
+  - pkg-config
+  - autoconf
+  - automake
+  - libtool
+  - make
+  - bison
+  - flex
+  - gettext
+  - git
+  - curl
+  - wget
+  - ca-certificates
+  - xz-utils
+
+mounts:
+  - [ host_share, /mnt/host, 9p, "trans=virtio,version=9p2000.L,msize=104857600", "0", "0" ]
+  - [ nix_store, /nix/store, virtiofs, "ro", "0", "0" ]
+
+runcmd:
+  - mkdir -p /mnt/host /nix/store
+  - mount -a
+  # Set up symlinks to LLVM tools (shared via virtiofs at /nix/store)
+  - ln -sf @llvm@/bin/clang /usr/local/bin/clang
+  - ln -sf @llvm@/bin/clang++ /usr/local/bin/clang++
+  - ln -sf @llvm@/bin/clang-cpp /usr/local/bin/clang-cpp
+  - ln -sf @llvm@/bin/ld.lld /usr/local/bin/ld.lld
+  - ln -sf @llvm@/bin/lld /usr/local/bin/lld
+  - ln -sf @llvm@/bin/llvm-ar /usr/local/bin/llvm-ar
+  - ln -sf @llvm@/bin/llvm-ranlib /usr/local/bin/llvm-ranlib
+  - ln -sf @llvm@/bin/llvm-nm /usr/local/bin/llvm-nm
+  - ln -sf @llvm@/bin/llvm-objcopy /usr/local/bin/llvm-objcopy
+  - ln -sf @llvm@/bin/llvm-objdump /usr/local/bin/llvm-objdump
+  - ln -sf @llvm@/bin/llvm-strip /usr/local/bin/llvm-strip
+  # Ninja from Nix store via virtiofs
+  - ln -sf @ninja@/bin/ninja /usr/local/bin/ninja
+  # CMake from Nix store via virtiofs
+  - ln -sf @cmake@/bin/cmake /usr/local/bin/cmake
+  - ln -sf @cmake@/bin/ctest /usr/local/bin/ctest
+  - ln -sf @cmake@/bin/cpack /usr/local/bin/cpack
+  # Meson from Nix store via virtiofs
+  - ln -sf @meson@/bin/meson /usr/local/bin/meson
+  # Make clang the default CC/CXX
+  - update-alternatives --install /usr/bin/cc cc /usr/local/bin/clang 100
+  - update-alternatives --install /usr/bin/c++ c++ /usr/local/bin/clang++ 100
+  - echo "VM ready" > /var/run/vm-ready
