@@ -22,6 +22,7 @@ packages:
   - wget
   - ca-certificates
   - xz-utils
+  - gperf
 
 mounts:
   - [ host_share, /mnt/host, 9p, "trans=virtio,version=9p2000.L,msize=104857600", "0", "0" ]

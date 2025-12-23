@@ -75,3 +75,6 @@ fi
 if command -v python3 &>/dev/null; then
   echo "| python3 | $(python3 --version | awk '{print $2}') |"
 fi
+if command -v gperf &>/dev/null; then
+  echo "| gperf | $(gperf --version | head -1 | awk '{print $NF}') |"
+fi

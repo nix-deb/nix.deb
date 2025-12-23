@@ -60,7 +60,8 @@ jobs:
             git \
             curl \
             wget \
-            jq
+            jq \
+            gperf
 
       - name: Read tool config from tools.json
         id: tools
