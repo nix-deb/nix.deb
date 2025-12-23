@@ -144,6 +144,19 @@ case "${1:-help}" in
     ssh $SSH_OPTS -p 2222 root@127.0.0.1 'bash /mnt/host/scripts/tools.sh'
     ;;
 
+  build)
+    shift
+    dep_name="${1:-}"
+    if [[ -z "$dep_name" ]]; then
+      echo "Usage: vm build <dependency>"
+      echo ""
+      echo "Available dependencies:"
+      ssh $SSH_OPTS -p 2222 root@127.0.0.1 'ls /mnt/host/deps/*.sh 2>/dev/null | xargs -n1 basename | sed "s/\.sh$//" | grep -v common || echo "  (none found)"'
+      exit 1
+    fi
+    ssh $SSH_OPTS -p 2222 root@127.0.0.1 "TARGET_DISTRO=@name@ TARGET_ARCH=x86_64 SYSROOT=/ bash /mnt/host/deps/$dep_name.sh"
+    ;;
+
   help|*)
     echo "Usage: vm <command> [args]"
     echo ""
@@ -159,6 +172,7 @@ case "${1:-help}" in
     echo "  reset             Remove VM disk (recreate from base on next run)"
     echo "  status            Check if VM is running"
     echo "  tools             Show installed build tools (Markdown)"
+    echo "  build DEP         Build a dependency (e.g., brotli, zlib)"
     echo "  help              Show this help"
     ;;
 esac

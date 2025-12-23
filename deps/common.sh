@@ -54,7 +54,7 @@ setup_paths() {
     require_env TARGET_DISTRO
     require_env TARGET_ARCH
 
-    : "${REPO_ROOT:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+    : "${REPO_ROOT:=$(pwd)}"
     : "${SYSROOT:=$REPO_ROOT/sysroots/$TARGET_DISTRO}"
     : "${PREFIX:=$REPO_ROOT/out/$TARGET_DISTRO/prefix}"
     : "${BUILD_DIR:=$REPO_ROOT/out/$TARGET_DISTRO/build}"
