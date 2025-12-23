@@ -22,7 +22,7 @@ Create build scripts for all remaining dependencies. Each script follows the pat
 
 #### Tier 0 (no dependencies)
 - [x] `deps/brotli.sh` - Brotli compression
-- [ ] `deps/libsodium.sh` - Cryptography (Nix only)
+- [x] `deps/libsodium.sh` - Cryptography (Nix only)
 - [ ] `deps/libblake3.sh` - BLAKE3 hashing (Nix only)
 - [ ] `deps/libcpuid.sh` - CPU feature detection
 - [ ] `deps/libseccomp.sh` - Sandboxing
