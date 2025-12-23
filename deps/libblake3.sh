@@ -21,9 +21,6 @@ build_libblake3() {
     # BLAKE3 C implementation is in the c/ subdirectory
     # Auto-detects amd64-asm SIMD optimizations for x86_64
     # Disable oneTBB parallelism (we don't need the dependency)
-    # CMake requires C++ even though we don't use it
-    # Tell clang++ to use libc++ (LLVM's C++ library) instead of libstdc++
-    export CXXFLAGS="${CXXFLAGS:-} -stdlib=libc++"
     build_cmake "$src_dir/c" \
         -DBUILD_SHARED_LIBS=OFF \
         -DBLAKE3_USE_TBB=OFF

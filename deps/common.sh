@@ -82,6 +82,23 @@ setup_clang() {
         die "clang not found"
     fi
 
+    # Find LLVM root (for libc++ and other LLVM libraries)
+    # Try LLVM_ROOT env var, then /opt/llvm, then detect from clang path
+    if [[ -z "${LLVM_ROOT:-}" ]]; then
+        if [[ -d /opt/llvm ]]; then
+            LLVM_ROOT=/opt/llvm
+        else
+            # Detect from clang binary location
+            local clang_path
+            clang_path=$(command -v clang)
+            LLVM_ROOT=$(dirname "$(dirname "$clang_path")")
+        fi
+    fi
+    export LLVM_ROOT
+
+    # LLVM libc++ library path (used instead of libstdc++)
+    local llvm_libdir="$LLVM_ROOT/lib/x86_64-unknown-linux-gnu"
+
     # Common flags
     # -O2 provides good optimization without the risks of -O3
     # -fPIC is required for position-independent code (needed for static libs linked into shared)
@@ -99,9 +116,11 @@ setup_clang() {
 
     export CC CXX
     export CFLAGS="${common_flags[*]} ${CFLAGS:-}"
-    export CXXFLAGS="${common_flags[*]} ${CXXFLAGS:-}"
+    # Use libc++ (LLVM's C++ standard library) instead of libstdc++
+    export CXXFLAGS="${common_flags[*]} -stdlib=libc++ ${CXXFLAGS:-}"
     # Use lld linker and rtlib=compiler-rt to avoid depending on GCC runtime
-    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -fuse-ld=lld -rtlib=compiler-rt -L$PREFIX/lib ${LDFLAGS:-}"
+    # Use libc++ and provide path to LLVM's libc++ libraries
+    export LDFLAGS="--target=$target_triple --sysroot=$SYSROOT -fuse-ld=lld -rtlib=compiler-rt -stdlib=libc++ -L$llvm_libdir -L$PREFIX/lib ${LDFLAGS:-}"
 
     # For CMake
     export CMAKE_TOOLCHAIN_ARGS=(
