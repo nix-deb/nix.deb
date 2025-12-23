@@ -39,7 +39,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build ${{ inputs.dependency }} on ${{ inputs.distro }}
+    name: ${{ inputs.dependency }} / ${{ inputs.distro }}
 
     steps:
       - uses: actions/checkout@v4
