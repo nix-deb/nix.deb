@@ -43,9 +43,24 @@ build_libcxx() {
     local src_dir
     src_dir=$(fetch_llvm_runtimes)
 
+    # IMPORTANT: Remove -stdlib=libc++ from flags when building libc++ itself
+    # This is a bootstrap situation - we can't use libc++ to build libc++!
+    # The LLVM runtime build system handles stdlib internally.
+    local saved_cxxflags="$CXXFLAGS"
+    local saved_ldflags="$LDFLAGS"
+    export CXXFLAGS="${CXXFLAGS//-stdlib=libc++/}"
+    export LDFLAGS="${LDFLAGS//-stdlib=libc++/}"
+    # Also remove the LLVM lib path since we don't want to link against pre-built libc++
+    export LDFLAGS="${LDFLAGS//-L$LLVM_ROOT\/lib\/x86_64-unknown-linux-gnu/}"
+
+    # Skip CMake's C++ compiler check - it will fail because there's no C++ stdlib yet
+    # This is safe because we know clang works, we just don't have runtime libs
+    local skip_cxx_check="-DCMAKE_CXX_COMPILER_WORKS=ON"
+
     # 1. Build libunwind (no dependencies)
     log_info "Building libunwind..."
     build_cmake "$src_dir/libunwind" \
+        $skip_cxx_check \
         -DLIBUNWIND_ENABLE_SHARED=OFF \
         -DLIBUNWIND_ENABLE_STATIC=ON \
         -DLIBUNWIND_USE_COMPILER_RT=ON \
@@ -54,6 +69,7 @@ build_libcxx() {
     # 2. Build libc++abi (depends on libunwind)
     log_info "Building libc++abi..."
     build_cmake "$src_dir/libcxxabi" \
+        $skip_cxx_check \
         -DLIBCXXABI_ENABLE_SHARED=OFF \
         -DLIBCXXABI_ENABLE_STATIC=ON \
         -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
@@ -66,6 +82,7 @@ build_libcxx() {
     # 3. Build libc++ (depends on libc++abi)
     log_info "Building libc++..."
     build_cmake "$src_dir/libcxx" \
+        $skip_cxx_check \
         -DLIBCXX_ENABLE_SHARED=OFF \
         -DLIBCXX_ENABLE_STATIC=ON \
         -DLIBCXX_CXX_ABI=libcxxabi \
@@ -77,6 +94,10 @@ build_libcxx() {
         -DLIBCXX_INCLUDE_TESTS=OFF \
         -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
         -DLIBCXX_INSTALL_HEADERS=ON
+
+    # Restore original flags
+    export CXXFLAGS="$saved_cxxflags"
+    export LDFLAGS="$saved_ldflags"
 }
 
 setup_paths
